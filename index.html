@@ -30,6 +30,7 @@
   #cameraApp.active { display: flex; }
   .camera-view { position: absolute; inset: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; }
   video { width: 100%; height: 100%; object-fit: cover; display: block; transform-origin: center center; transition: transform 0.1s ease-out; }
+  video.mirrored { transform: scaleX(-1) !important; }
   canvas { display: none; }
 
   .grid { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
@@ -52,6 +53,14 @@
   .shutter-outer:active { transform: scale(0.95); }
   .shutter-inner { width: 64px; height: 64px; border-radius: 50%; background: #fff; }
   
+  /* ★ カメラ切り替えボタン */
+  .flip-btn { 
+    width: 56px; height: 56px; border-radius: 50%; 
+    background: rgba(255,255,255,0.15); border: none; color: #fff; 
+    font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .flip-btn:active { background: rgba(255,255,255,0.3); }
+
   .flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 30; }
   .flash.fire { animation: flashAnim 0.3s ease-out; }
   @keyframes flashAnim { 0% { opacity: 0.8; } 100% { opacity: 0; } }
@@ -71,17 +80,25 @@
   .gallery-item { aspect-ratio: 3 / 4; background: #222; border-radius: 4px; overflow: hidden; cursor: pointer; }
   .gallery-item img { width: 100%; height: 100%; object-fit: cover; }
 
-  /* ================= プレビュー (Z-indexを一番上に) ================= */
+  /* ================= プレビュー ================= */
   .preview-overlay { position: fixed; inset: 0; background: #000; z-index: 1000; display: none; flex-direction: column; }
   .preview-overlay.open { display: flex; }
-  .preview-header { position: absolute; top: 0; left: 0; right: 0; padding: 50px 20px 20px; display: flex; justify-content: space-between; align-items: center; background: linear-gradient(180deg, rgba(0,0,0,0.8), transparent); z-index: 1010; }
+  .preview-header { position: absolute; top: 0; left: 0; right: 0; padding: 50px 20px 20px; display: flex; justify-content: space-between; align-items: center; background: linear-gradient(180deg, rgba(0,0,0,0.8), transparent); z-index: 1010; pointer-events: none; }
+  .preview-header button { pointer-events: auto; }
   .btn-back { background: rgba(255,255,255,0.2); border: none; color: #fff; border-radius: 20px; padding: 8px 16px; font-size: 14px; font-weight: bold; cursor: pointer; }
   .preview-actions { display: flex; gap: 8px; }
   .btn-act { border: none; color: #000; border-radius: 20px; padding: 8px 16px; font-size: 14px; font-weight: bold; cursor: pointer; }
   .btn-share { background: #fff; }
   .btn-upload { background: #ffcc00; }
-  .preview-content { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-  .preview-content img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  
+  /* ★ スワイプ用コンテナ */
+  .preview-content { flex: 1; display: flex; align-items: center; overflow-y: hidden; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+  .preview-content::-webkit-scrollbar { display: none; }
+  .preview-slide { flex: 0 0 100%; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; scroll-snap-align: center; }
+  .preview-slide img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  
+  /* ★ ページインジケーター */
+  .page-indicator { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.6); color: #fff; padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: bold; z-index: 1010; display: none; }
 
   /* ================= マップ ================= */
   .map-overlay { position: fixed; inset: 0; background: #000; z-index: 80; display: none; flex-direction: column; }
@@ -142,7 +159,8 @@
     <div class="shutter-container">
       <div class="shutter-outer" id="shutter"><div class="shutter-inner"></div></div>
     </div>
-    <div style="width:56px;"></div>
+    <!-- ★ カメラ切り替えボタン -->
+    <button class="flip-btn" id="flipBtn">🔄</button>
   </div>
 
   <div class="gallery-overlay" id="galleryOverlay">
@@ -156,7 +174,7 @@
     <div class="gallery-grid" id="galleryGrid"></div>
   </div>
 
-  <!-- プレビュー（Z-index: 1000 に設定済み） -->
+  <!-- プレビュー -->
   <div class="preview-overlay" id="previewOverlay">
     <div class="preview-header">
       <button class="btn-back" id="previewBack">← 戻る</button>
@@ -165,7 +183,9 @@
         <button class="btn-act btn-upload" id="previewUpload">アップロード</button>
       </div>
     </div>
+    <!-- スワイプ可能なコンテナ -->
     <div class="preview-content" id="previewContent"></div>
+    <div class="page-indicator" id="pageIndicator">1 / 1</div>
   </div>
 
   <div class="map-overlay" id="mapOverlay">
@@ -222,6 +242,7 @@
   const thumbBtn = document.getElementById('thumbBtn');
   const thumbImg = document.getElementById('thumbImg');
   const cameraView = document.getElementById('cameraView');
+  const flipBtn = document.getElementById('flipBtn');
   
   const galleryOverlay = document.getElementById('galleryOverlay');
   const galleryGrid = document.getElementById('galleryGrid');
@@ -233,6 +254,7 @@
   const previewBack = document.getElementById('previewBack');
   const previewShare = document.getElementById('previewShare');
   const previewUpload = document.getElementById('previewUpload');
+  const pageIndicator = document.getElementById('pageIndicator');
 
   const mapOverlay = document.getElementById('mapOverlay');
   const mapClose = document.getElementById('mapClose');
@@ -245,13 +267,14 @@
   let mediaItems = [];
   let shutterBusy = false;
   let currentPreviewItem = null;
+  let currentPreviewIndex = 0;
   let myMap = null;
   let mapMarkersLayer = null;
   let myLocation = { lat: 35.681236, lng: 139.767125 };
-  let openedFromMap = false; // ★ マップから開いたかどうかのフラグ
   
   let scale = 1, panX = 0, panY = 0;
   let startX = 0, startY = 0, startDist = 0, startScale = 1, startPanX = 0, startPanY = 0;
+  let currentFacingMode = 'environment'; // ★ カメラの向き
 
   function getLocation() {
     return new Promise((resolve, reject) => {
@@ -267,15 +290,29 @@
     });
   }
 
-  function initCamera() {
+  // ★ カメラ起動処理（向きを引数で受け取る）
+  function startCamera(facingMode) {
     permText.textContent = "カメラを起動中...";
     permBtn.style.display = 'none';
+    
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+    }
+    
     navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 3840 }, height: { ideal: 2160 } },
+      video: { facingMode: facingMode, width: { ideal: 3840 }, height: { ideal: 2160 } },
       audio: false
     }).then(s => {
       stream = s;
       video.srcObject = stream;
+      
+      // インカメラの時は鏡面反転させる
+      if (facingMode === 'user') {
+        video.classList.add('mirrored');
+      } else {
+        video.classList.remove('mirrored');
+      }
+      
       video.play().catch(() => {});
       permScreen.classList.add('hidden');
     }).catch(err => {
@@ -284,7 +321,17 @@
       permBtn.textContent = "再試行";
     });
   }
-  permBtn.addEventListener('click', initCamera);
+
+  permBtn.addEventListener('click', () => startCamera(currentFacingMode));
+
+  // ★ カメラ切り替え処理
+  flipBtn.addEventListener('click', () => {
+    if (stream) {
+      currentFacingMode = (currentFacingMode === 'environment') ? 'user' : 'environment';
+      scale = 1; panX = 0; panY = 0; applyTransform(); // ズームリセット
+      startCamera(currentFacingMode);
+    }
+  });
 
   cameraView.addEventListener('touchstart', (e) => {
     if (e.touches.length === 2) {
@@ -313,7 +360,10 @@
     if (scale <= 1.05) { scale = 1; panX = 0; panY = 0; applyTransform(); }
   });
 
-  function applyTransform() { video.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`; }
+  function applyTransform() { 
+    // CSSのtransformを適用（mirroredクラスと競合しないように）
+    video.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`; 
+  }
 
   function takePhoto() {
     if (!stream || !video.videoWidth || shutterBusy) return;
@@ -322,6 +372,13 @@
 
     canvas.width = video.videoWidth; canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
+    
+    // インカメラの時はキャンバスも反転させる
+    if (currentFacingMode === 'user') {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+    }
+    
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     
     const videoRatio = video.videoWidth / video.videoHeight;
@@ -374,39 +431,66 @@
       el.appendChild(img);
       
       el.onclick = () => {
-        openedFromMap = false; // ★ ギャラリーから開いた
-        currentPreviewItem = item;
-        previewContent.innerHTML = '';
-        const bigImg = document.createElement('img'); bigImg.src = item.dataURL;
-        previewContent.appendChild(bigImg);
-        
-        if (item.isUploaded) {
-          previewUpload.textContent = '済';
-          previewUpload.style.background = '#555';
-          previewUpload.disabled = true;
-        } else {
-          previewUpload.textContent = 'アップロード';
-          previewUpload.style.background = '#ffcc00';
-          previewUpload.disabled = false;
-        }
-        
-        previewOverlay.classList.add('open');
+        openPreview([item], 0);
       };
       galleryGrid.appendChild(el);
     }
   }
 
-  // ★ プレビューを閉じる時の処理を修正
+  // ★ プレビューを開く共通関数（スワイプ対応）
+  function openPreview(items, startIndex) {
+    previewContent.innerHTML = '';
+    
+    items.forEach((item, index) => {
+      const slide = document.createElement('div');
+      slide.className = 'preview-slide';
+      const bigImg = document.createElement('img'); bigImg.src = item.dataURL;
+      slide.appendChild(bigImg);
+      previewContent.appendChild(slide);
+    });
+    
+    // 初期スクロール位置を設定
+    previewContent.scrollLeft = previewContent.clientWidth * startIndex;
+    
+    updatePreviewUI(items[startIndex], items.length, startIndex + 1);
+    previewOverlay.classList.add('open');
+    
+    // スクロールイベント（スワイプ検知）
+    previewContent.onscroll = () => {
+      const index = Math.round(previewContent.scrollLeft / previewContent.clientWidth);
+      if (items[index]) {
+        updatePreviewUI(items[index], items.length, index + 1);
+      }
+    };
+  }
+
+  function updatePreviewUI(item, total, current) {
+    currentPreviewItem = item;
+    currentPreviewIndex = current - 1;
+    
+    if (total > 1) {
+      pageIndicator.style.display = 'block';
+      pageIndicator.textContent = `${current} / ${total}`;
+    } else {
+      pageIndicator.style.display = 'none';
+    }
+    
+    if (item.isUploaded || item.blob === null) {
+      previewUpload.textContent = '済';
+      previewUpload.style.background = '#555';
+      previewUpload.disabled = true;
+    } else {
+      previewUpload.textContent = 'アップロード';
+      previewUpload.style.background = '#ffcc00';
+      previewUpload.disabled = false;
+    }
+  }
+
   previewBack.onclick = () => {
     previewOverlay.classList.remove('open');
     previewContent.innerHTML = '';
+    previewContent.onscroll = null;
     currentPreviewItem = null;
-    
-    // もしマップから開いていたなら、マップは開いたまま（裏にあるので）維持される
-    if (openedFromMap) {
-      // 必要ならここでマップの再描画などを行う
-      openedFromMap = false;
-    }
   };
 
   previewShare.onclick = async () => {
@@ -528,34 +612,53 @@
     mapOverlay.classList.remove('open');
   };
 
+  // ★ マップ上のピンをグループ化して表示
   function renderLocalHistory() {
     if (!mapMarkersLayer) return;
     mapMarkersLayer.clearLayers();
     
     const uploadedHistory = JSON.parse(localStorage.getItem('uploadedHistory') || '[]');
-    
+    if (uploadedHistory.length === 0) return;
+
+    // 位置情報が近いものをグループ化するロジック
+    const groups = [];
     uploadedHistory.forEach(item => {
+      let foundGroup = false;
+      for (let group of groups) {
+        // 緯度経度の差が約100m以内（0.001度以内）なら同じグループとする
+        if (Math.abs(group[0].lat - item.lat) < 0.001 && Math.abs(group[0].lng - item.lng) < 0.001) {
+          group.push(item);
+          foundGroup = true;
+          break;
+        }
+      }
+      if (!foundGroup) {
+        groups.push([item]);
+      }
+    });
+
+    // グループごとにマーカーを立てる
+    groups.forEach(group => {
+      // 代表の画像をピンにする
       const myIcon = L.divIcon({
         className: 'custom-div-icon',
-        html: `<img src="${item.img}" class="custom-pin">`,
+        html: `<img src="${group[0].img}" class="custom-pin">`,
         iconSize: [50, 50],
         iconAnchor: [25, 25]
       });
       
-      const marker = L.marker([item.lat, item.lng], { icon: myIcon }).addTo(mapMarkersLayer);
+      const marker = L.marker([group[0].lat, group[0].lng], { icon: myIcon }).addTo(mapMarkersLayer);
       
       marker.on('click', () => {
-        openedFromMap = true; // ★ マップから開いたフラグを立てる
-        currentPreviewItem = { dataURL: item.img, blob: null, timestamp: item.timestamp, isUploaded: true };
-        previewContent.innerHTML = '';
-        const bigImg = document.createElement('img'); bigImg.src = item.img;
-        previewContent.appendChild(bigImg);
+        // グループ内のすべての画像をスワイプできるように配列を作成
+        const itemsToPreview = group.map(g => ({
+          dataURL: g.img,
+          blob: null,
+          timestamp: g.timestamp,
+          isUploaded: true
+        }));
         
-        previewUpload.textContent = '済';
-        previewUpload.style.background = '#555';
-        previewUpload.disabled = true;
-        
-        previewOverlay.classList.add('open');
+        openPreview(itemsToPreview, 0);
       });
     });
   }
