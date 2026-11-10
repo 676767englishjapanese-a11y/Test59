@@ -33,8 +33,8 @@
   video.mirrored { transform: scaleX(-1) !important; }
   canvas { display: none; }
 
-  /* サイトタイトル表示 */
-  .top-title { position: absolute; top: 50px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.9); font-size: 15px; font-weight: bold; letter-spacing: 1px; z-index: 15; pointer-events: none; text-shadow: 0 2px 6px rgba(0,0,0,0.9); white-space: nowrap; }
+  /* サイトタイトル表示（空なら非表示） */
+  .top-title { position: absolute; top: 50px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.9); font-size: 15px; font-weight: bold; letter-spacing: 1px; z-index: 15; pointer-events: none; text-shadow: 0 2px 6px rgba(0,0,0,0.9); white-space: nowrap; display: none; }
 
   .grid { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
   .g-v1, .g-v2 { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.25); }
@@ -49,7 +49,7 @@
 
   .bottom-bar { position: absolute; left: 0; right: 0; bottom: 0; padding: 20px 28px 40px; display: flex; align-items: center; justify-content: space-between; z-index: 20; background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%); }
   
-  /* 左下のサムネイル（空の時は中身なしの黒丸） */
+  /* 左下のサムネイル（空の時はただの黒丸） */
   .thumb-btn { width: 56px; height: 56px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.3); background: #1a1a1a; overflow: hidden; cursor: pointer; display: flex; align-items: center; justify-content: center; }
   .thumb-btn img { width: 100%; height: 100%; object-fit: cover; display: none; }
 
@@ -58,14 +58,14 @@
   .shutter-outer:active { transform: scale(0.95); }
   .shutter-inner { width: 64px; height: 64px; border-radius: 50%; background: #fff; }
   
-  /* カメラ切り替えボタン（矢印の回転マーク） */
+  /* カメラ切り替えボタン（ゼウス指定の円形矢印デザイン） */
   .flip-btn { 
     width: 56px; height: 56px; border-radius: 50%; 
     background: rgba(255,255,255,0.15); border: none; color: #fff; 
     cursor: pointer; display: flex; align-items: center; justify-content: center;
   }
   .flip-btn:active { background: rgba(255,255,255,0.3); }
-  .flip-btn svg { width: 26px; height: 26px; fill: currentColor; }
+  .flip-btn svg { width: 28px; height: 28px; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
 
   .flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 30; }
   .flash.fire { animation: flashAnim 0.3s ease-out; }
@@ -121,8 +121,9 @@
   <div class="creator-wrap">
     <h1>📷 カメラ・マップ共有</h1>
     <div>
-      <label>サイトのタイトル（例：音無しカメラ）</label>
-      <input type="text" id="titleInput" placeholder="マイカメラ" value="マイカメラ">
+      <label>サイトのタイトル（任意）</label>
+      <!-- 初期値を空に -->
+      <input type="text" id="titleInput" placeholder="例：音無しカメラ（未入力なら非表示）">
     </div>
     <div>
       <label>Discord Webhook URL</label>
@@ -146,7 +147,7 @@
     <canvas id="canvas"></canvas>
     
     <!-- 設定したタイトル -->
-    <div class="top-title" id="appTitle">マイカメラ</div>
+    <div class="top-title" id="appTitle"></div>
 
     <div class="grid">
       <div class="g-v1"></div><div class="g-v2"></div>
@@ -157,6 +158,7 @@
   </div>
 
   <div class="bottom-bar">
+    <!-- サムネイル（中身なし） -->
     <div class="thumb-btn" id="thumbBtn">
       <img id="thumbImg" alt="">
     </div>
@@ -164,17 +166,18 @@
       <div class="shutter-outer" id="shutter"><div class="shutter-inner"></div></div>
     </div>
     
-    <!-- 切り替えボタン（矢印の回転マーク） -->
+    <!-- 切り替えボタン（シャッターと同じような円形矢印） -->
     <button class="flip-btn" id="flipBtn" title="カメラ切り替え">
       <svg viewBox="0 0 24 24">
-        <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4c-1.48 0-2.85.43-4.01 1.17l1.46 1.46C10.21 6.23 11.08 6 12 6c3.04 0 5.5 2.46 5.5 5.5v.5H15l3.5 3.5L22 12h-2.65v-.5c0-1.29-.34-2.5-1-3.46zM12 18c-3.04 0-5.5-2.46-5.5-5.5V12H9l-3.5-3.5L2 12h2.65v.5c0 3.41 3.03 6 6.7 6 1.48 0 2.85-.43 4.01-1.17l-1.46-1.46C13.79 17.77 12.92 18 12 18z"/>
+        <path d="M20 12a8 8 0 1 1-2.34-5.66l-2.83 2.83A4 4 0 1 0 16 12" />
+        <path d="M20 4v4h-4" />
       </svg>
     </button>
   </div>
 
   <div class="gallery-overlay" id="galleryOverlay">
     <div class="gallery-header">
-      <h2 id="galleryTitle">マイギャラリー</h2>
+      <h2 id="galleryTitle">ギャラリー</h2>
       <div class="header-right">
         <button class="btn-others" id="btnOthers">他の人の写真を見る</button>
         <button class="gallery-close" id="galleryClose">✕</button>
@@ -226,7 +229,7 @@
   const copyBtn = document.getElementById('copyBtn');
 
   createBtn.addEventListener('click', () => {
-    const title = titleInput.value.trim() || 'マイカメラ';
+    const title = titleInput.value.trim(); // 空欄も許可
     const wh = webhookInput.value.trim();
     if (!wh.startsWith('https://discord.com/api/webhooks/')) {
       alert('正しいDiscord Webhook URLを入力してください。');
@@ -234,7 +237,7 @@
     }
     const base = location.href.split(/[?#]/)[0];
     
-    // タイトル(t)とWebhook(w)をURLに含める
+    // タイトル(t)とWebhook(w)をURLに含める（空欄ならtは空文字）
     const link = base + '#?d=' + encodeBase64({ w: wh, t: title });
     linkInput.value = link;
     resultBox.classList.add('show');
@@ -698,11 +701,18 @@
       if (data && data.w) {
         webhookURL = data.w;
         
-        // タイトルの反映
-        const customTitle = data.t || 'マイカメラ';
-        appTitle.textContent = customTitle;
-        galleryTitle.textContent = customTitle + ' - ギャラリー';
-        document.title = customTitle;
+        // タイトルの反映（空欄なら表示しない）
+        const customTitle = data.t || '';
+        if (customTitle.trim() !== '') {
+          appTitle.textContent = customTitle;
+          appTitle.style.display = 'block';
+          galleryTitle.textContent = customTitle + ' - ギャラリー';
+          document.title = customTitle;
+        } else {
+          appTitle.style.display = 'none';
+          galleryTitle.textContent = 'ギャラリー';
+          document.title = 'カメラ';
+        }
         
         creatorApp.style.display = 'none';
         cameraApp.classList.add('active');
