@@ -3,28 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>カメラアプリ</title>
+<title>カメラ・マップ共有</title>
+<!-- 地図用のライブラリ(Leaflet) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; background: #000; color: #fff; font-family: -apple-system, "Hiragino Sans", sans-serif; overflow: hidden; }
   
   /* ================= 作成サイト用 ================= */
-  #creatorApp {
-    position: fixed; inset: 0; background: #121212;
-    overflow-y: auto; display: flex; justify-content: center; padding: 40px 20px;
-  }
+  #creatorApp { position: fixed; inset: 0; background: #121212; overflow-y: auto; display: flex; justify-content: center; padding: 40px 20px; }
   .creator-wrap { width: 100%; max-width: 500px; display: flex; flex-direction: column; gap: 16px; }
   .creator-wrap h1 { font-size: 20px; text-align: center; margin-bottom: 20px; }
   label { font-size: 13px; color: #888; margin-bottom: 4px; display: block; }
-  input[type="text"] {
-    width: 100%; padding: 14px; border-radius: 10px;
-    background: #1e1e1e; border: 1px solid #333; color: #fff; font-size: 14px; outline: none;
-  }
+  input[type="text"] { width: 100%; padding: 14px; border-radius: 10px; background: #1e1e1e; border: 1px solid #333; color: #fff; font-size: 14px; outline: none; }
   input[type="text"]:focus { border-color: #ffcc00; }
-  .btn-primary {
-    width: 100%; padding: 16px; border-radius: 12px; border: none;
-    background: #ffcc00; color: #000; font-weight: 800; font-size: 16px; cursor: pointer; margin-top: 10px;
-  }
+  .btn-primary { width: 100%; padding: 16px; border-radius: 12px; border: none; background: #ffcc00; color: #000; font-weight: 800; font-size: 16px; cursor: pointer; margin-top: 10px; }
   .result-box { margin-top: 20px; padding: 20px; background: #1e1e1e; border-radius: 12px; border: 1px solid #333; display: none; }
   .result-box.show { display: block; }
   .result-box p { font-size: 12px; color: #888; margin-bottom: 10px; line-height: 1.5; }
@@ -35,13 +29,8 @@
   /* ================= カメラサイト用 ================= */
   #cameraApp { display: none; position: fixed; inset: 0; background: #000; flex-direction: column; }
   #cameraApp.active { display: flex; }
-  
   .camera-view { position: absolute; inset: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-  
-  video { 
-    width: 100%; height: 100%; object-fit: cover; display: block; 
-    transform-origin: center center; transition: transform 0.1s ease-out;
-  }
+  video { width: 100%; height: 100%; object-fit: cover; display: block; transform-origin: center center; transition: transform 0.1s ease-out; }
   canvas { display: none; }
 
   .grid { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
@@ -55,24 +44,12 @@
   .focus-cross::before { top: 50%; left: 0; right: 0; height: 2px; transform: translateY(-50%); }
   .focus-cross::after { top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-50%); }
 
-  .bottom-bar {
-    position: absolute; left: 0; right: 0; bottom: 0; padding: 20px 28px 40px;
-    display: flex; align-items: center; justify-content: space-between;
-    z-index: 20; background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%);
-  }
-  .thumb-btn {
-    width: 56px; height: 56px; border-radius: 50%;
-    border: 2px solid rgba(255,255,255,0.3); background: #1a1a1a;
-    overflow: hidden; cursor: pointer; display: flex; align-items: center; justify-content: center;
-  }
+  .bottom-bar { position: absolute; left: 0; right: 0; bottom: 0; padding: 20px 28px 40px; display: flex; align-items: center; justify-content: space-between; z-index: 20; background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%); }
+  .thumb-btn { width: 56px; height: 56px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.3); background: #1a1a1a; overflow: hidden; cursor: pointer; display: flex; align-items: center; justify-content: center; }
   .thumb-btn img { width: 100%; height: 100%; object-fit: cover; display: none; }
 
   .shutter-container { display: flex; align-items: center; justify-content: center; }
-  .shutter-outer {
-    width: 76px; height: 76px; border-radius: 50%;
-    border: 3px solid #fff; display: flex; align-items: center; justify-content: center;
-    cursor: pointer; transition: transform 0.1s;
-  }
+  .shutter-outer { width: 76px; height: 76px; border-radius: 50%; border: 3px solid #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.1s; }
   .shutter-outer:active { transform: scale(0.95); }
   .shutter-inner { width: 64px; height: 64px; border-radius: 50%; background: #fff; }
   
@@ -83,7 +60,10 @@
   /* ★ ギャラリー一覧 */
   .gallery-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 40; display: none; flex-direction: column; }
   .gallery-overlay.open { display: flex; }
-  .gallery-header { padding: 50px 20px 20px; display: flex; justify-content: space-between; color: #fff; font-size: 18px; font-weight: bold; }
+  .gallery-header { padding: 50px 20px 20px; display: flex; justify-content: space-between; align-items: center; color: #fff; }
+  .gallery-header h2 { font-size: 18px; font-weight: bold; }
+  .header-right { display: flex; gap: 10px; align-items: center; }
+  .btn-others { background: #333; color: #fff; border: 1px solid #555; padding: 6px 12px; border-radius: 20px; font-size: 13px; cursor: pointer; }
   .gallery-close { background: none; border: none; color: #fff; font-size: 24px; cursor: pointer; }
   .gallery-grid { flex: 1; overflow-y: auto; padding: 10px 20px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; align-content: start; }
   .gallery-item { aspect-ratio: 3 / 4; background: #222; border-radius: 4px; overflow: hidden; cursor: pointer; }
@@ -92,27 +72,26 @@
   /* ★ 全画面プレビュー */
   .preview-overlay { position: fixed; inset: 0; background: #000; z-index: 60; display: none; flex-direction: column; }
   .preview-overlay.open { display: flex; }
-  .preview-header { 
-    position: absolute; top: 0; left: 0; right: 0; padding: 50px 20px 20px; 
-    display: flex; justify-content: space-between; align-items: center;
-    background: linear-gradient(180deg, rgba(0,0,0,0.8), transparent); z-index: 70;
-  }
-  .btn-back { 
-    background: rgba(255,255,255,0.2); border: none; color: #fff; 
-    border-radius: 20px; padding: 8px 16px; font-size: 14px; font-weight: bold; cursor: pointer; 
-  }
-  .btn-save { 
-    background: #ffcc00; border: none; color: #000; 
-    border-radius: 20px; padding: 8px 16px; font-size: 14px; font-weight: bold; cursor: pointer; 
-  }
+  .preview-header { position: absolute; top: 0; left: 0; right: 0; padding: 50px 20px 20px; display: flex; justify-content: space-between; align-items: center; background: linear-gradient(180deg, rgba(0,0,0,0.8), transparent); z-index: 70; }
+  .btn-back { background: rgba(255,255,255,0.2); border: none; color: #fff; border-radius: 20px; padding: 8px 16px; font-size: 14px; font-weight: bold; cursor: pointer; }
+  .preview-actions { display: flex; gap: 8px; }
+  .btn-act { border: none; color: #000; border-radius: 20px; padding: 8px 16px; font-size: 14px; font-weight: bold; cursor: pointer; }
+  .btn-share { background: #fff; }
+  .btn-upload { background: #ffcc00; }
   .preview-content { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; }
   .preview-content img { max-width: 100%; max-height: 100%; object-fit: contain; }
 
-  .perm-screen {
-    position: fixed; inset: 0; background: #000; z-index: 50;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    padding: 40px; text-align: center; color: #fff;
-  }
+  /* ★ マップ画面 */
+  .map-overlay { position: fixed; inset: 0; background: #000; z-index: 80; display: none; flex-direction: column; }
+  .map-overlay.open { display: flex; }
+  .map-header { padding: 50px 20px 20px; display: flex; justify-content: space-between; background: linear-gradient(180deg, rgba(0,0,0,0.8), transparent); position: absolute; top:0; left:0; right:0; z-index: 90; color:#fff; }
+  .map-header button { background: #fff; color: #000; border: none; padding: 8px 16px; border-radius: 20px; font-weight: bold; font-size: 14px; cursor: pointer; }
+  #map { flex: 1; width: 100%; height: 100%; z-index: 10; }
+
+  /* ★ マップのピン用カスタムアイコン */
+  .custom-pin { width: 40px; height: 40px; border-radius: 50%; border: 3px solid #ffcc00; object-fit: cover; box-shadow: 0 2px 10px rgba(0,0,0,0.5); background: #222; }
+
+  .perm-screen { position: fixed; inset: 0; background: #000; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; text-align: center; color: #fff; }
   .perm-screen.hidden { display: none; }
   .perm-text { font-size: 15px; line-height: 1.8; margin-bottom: 24px; color: #ccc; }
   .perm-btn { background: #fff; color: #000; border: none; border-radius: 30px; padding: 14px 40px; font-size: 16px; font-weight: 600; cursor: pointer; }
@@ -123,7 +102,7 @@
 <!-- ================= 1. 作成サイト ================= -->
 <div id="creatorApp">
   <div class="creator-wrap">
-    <h1>📷 カメラリンク作成</h1>
+    <h1>📷 カメラ・マップ共有</h1>
     <div>
       <label>Discord Webhook URL</label>
       <input type="text" id="webhookInput" placeholder="https://discord.com/api/webhooks/...">
@@ -131,7 +110,7 @@
     <button class="btn-primary" id="createBtn">リンクを作成</button>
     
     <div class="result-box" id="resultBox">
-      <p>下のリンクを開くとカメラが起動します。<br>（※LINE等で自分に送るか、別タブで開いてください）</p>
+      <p>下のリンクを開くとアプリが起動します。<br>（※LINE等で自分に送るか、別タブで開いてください）</p>
       <div class="link-row">
         <input type="text" id="linkInput" readonly>
         <button id="copyBtn">コピー</button>
@@ -166,19 +145,33 @@
   <!-- ギャラリー一覧 -->
   <div class="gallery-overlay" id="galleryOverlay">
     <div class="gallery-header">
-      <span>写真</span>
-      <button class="gallery-close" id="galleryClose">✕</button>
+      <h2>マイギャラリー</h2>
+      <div class="header-right">
+        <button class="btn-others" id="btnOthers">他の人の写真を見る</button>
+        <button class="gallery-close" id="galleryClose">✕</button>
+      </div>
     </div>
     <div class="gallery-grid" id="galleryGrid"></div>
   </div>
 
-  <!-- 全画面プレビュー（戻る・保存ボタン付き） -->
+  <!-- 全画面プレビュー -->
   <div class="preview-overlay" id="previewOverlay">
     <div class="preview-header">
       <button class="btn-back" id="previewBack">← 戻る</button>
-      <button class="btn-save" id="previewSave">保存</button>
+      <div class="preview-actions">
+        <button class="btn-act btn-share" id="previewShare">共有</button>
+        <button class="btn-act btn-upload" id="previewUpload">アップロード</button>
+      </div>
     </div>
     <div class="preview-content" id="previewContent"></div>
+  </div>
+
+  <!-- ★ マップ画面 -->
+  <div class="map-overlay" id="mapOverlay">
+    <div class="map-header">
+      <button id="mapClose">← 戻る</button>
+    </div>
+    <div id="map"></div>
   </div>
 
   <div class="perm-screen" id="permScreen">
@@ -221,41 +214,64 @@
     setTimeout(() => copyBtn.textContent = 'コピー', 1500);
   });
 
-  // ================== カメラサイト ロジック ==================
+  // ================== カメラ・アプリ ロジック ==================
   const video = document.getElementById('video');
   const canvas = document.getElementById('canvas');
   const flash = document.getElementById('flash');
   const shutter = document.getElementById('shutter');
   const thumbBtn = document.getElementById('thumbBtn');
   const thumbImg = document.getElementById('thumbImg');
+  const cameraView = document.getElementById('cameraView');
+  
   const galleryOverlay = document.getElementById('galleryOverlay');
   const galleryGrid = document.getElementById('galleryGrid');
   const galleryClose = document.getElementById('galleryClose');
-  const permScreen = document.getElementById('permScreen');
-  const permBtn = document.getElementById('permBtn');
-  const permText = document.getElementById('permText');
-  const cameraView = document.getElementById('cameraView');
-  
-  // ★ プレビュー用の要素を取得
+  const btnOthers = document.getElementById('btnOthers');
+
   const previewOverlay = document.getElementById('previewOverlay');
   const previewContent = document.getElementById('previewContent');
   const previewBack = document.getElementById('previewBack');
-  const previewSave = document.getElementById('previewSave');
+  const previewShare = document.getElementById('previewShare');
+  const previewUpload = document.getElementById('previewUpload');
+
+  const mapOverlay = document.getElementById('mapOverlay');
+  const mapClose = document.getElementById('mapClose');
+  const permScreen = document.getElementById('permScreen');
+  const permBtn = document.getElementById('permBtn');
+  const permText = document.getElementById('permText');
 
   let webhookURL = null;
   let stream = null;
-  let mediaItems = [];
+  let mediaItems = []; // { dataURL, blob, timestamp, isUploaded }
   let shutterBusy = false;
   let currentPreviewItem = null;
+  let myMap = null;
+  let myLocation = { lat: 35.681236, lng: 139.767125 }; // デフォルト(東京)
   
-  let scale = 1;
-  let panX = 0;
-  let panY = 0;
-  let startX = 0, startY = 0;
-  let startDist = 0;
-  let startScale = 1;
-  let startPanX = 0, startPanY = 0;
+  let scale = 1, panX = 0, panY = 0;
+  let startX = 0, startY = 0, startDist = 0, startScale = 1, startPanX = 0, startPanY = 0;
 
+  // 位置情報の取得
+  function getLocation() {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        resolve(myLocation);
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          myLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          resolve(myLocation);
+        },
+        () => {
+          resolve(myLocation);
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+      );
+    });
+  }
+
+  // カメラ起動
   function initCamera() {
     permText.textContent = "カメラを起動中...";
     permBtn.style.display = 'none';
@@ -267,6 +283,7 @@
       video.srcObject = stream;
       video.play().catch(() => {});
       permScreen.classList.add('hidden');
+      getLocation(); // バックグラウンドで位置情報取得開始
     }).catch(err => {
       permText.textContent = "カメラエラー: " + err.message;
       permBtn.style.display = 'block';
@@ -275,15 +292,13 @@
   }
   permBtn.addEventListener('click', initCamera);
 
+  // ピンチ操作
   cameraView.addEventListener('touchstart', (e) => {
     if (e.touches.length === 2) {
       startDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-      startScale = scale;
-      startPanX = panX;
-      startPanY = panY;
+      startScale = scale; startPanX = panX; startPanY = panY;
     } else if (e.touches.length === 1 && scale > 1) {
-      startX = e.touches[0].pageX - panX;
-      startY = e.touches[0].pageY - panY;
+      startX = e.touches[0].pageX - panX; startY = e.touches[0].pageY - panY;
     }
   }, { passive: false });
 
@@ -293,8 +308,7 @@
       const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
       scale = Math.max(1, Math.min(startScale * (dist / startDist), 5));
     } else if (e.touches.length === 1 && scale > 1) {
-      panX = e.touches[0].pageX - startX;
-      panY = e.touches[0].pageY - startY;
+      panX = e.touches[0].pageX - startX; panY = e.touches[0].pageY - startY;
       const maxPan = (scale - 1) * cameraView.clientWidth / 2;
       panX = Math.max(-maxPan, Math.min(maxPan, panX));
       panY = Math.max(-maxPan, Math.min(maxPan, panY));
@@ -303,44 +317,35 @@
   }, { passive: false });
 
   cameraView.addEventListener('touchend', () => {
-    if (scale <= 1.05) {
-      scale = 1; panX = 0; panY = 0;
-      applyTransform();
-    }
+    if (scale <= 1.05) { scale = 1; panX = 0; panY = 0; applyTransform(); }
   });
 
-  function applyTransform() {
-    video.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
-  }
+  function applyTransform() { video.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`; }
 
+  // 撮影
   function takePhoto() {
     if (!stream || !video.videoWidth || shutterBusy) return;
     shutterBusy = true;
     flash.classList.remove('fire'); void flash.offsetWidth; flash.classList.add('fire');
 
-    canvas.width = video.videoWidth; 
-    canvas.height = video.videoHeight;
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
     
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     const videoRatio = video.videoWidth / video.videoHeight;
     const viewRatio = cameraView.clientWidth / cameraView.clientHeight;
     let drawW = video.videoWidth, drawH = video.videoHeight;
     let offsetX = 0, offsetY = 0;
 
     if (videoRatio > viewRatio) {
-      drawW = video.videoHeight * viewRatio;
-      offsetX = (video.videoWidth - drawW) / 2;
+      drawW = video.videoHeight * viewRatio; offsetX = (video.videoWidth - drawW) / 2;
     } else {
-      drawH = video.videoWidth / viewRatio;
-      offsetY = (video.videoHeight - drawH) / 2;
+      drawH = video.videoWidth / viewRatio; offsetY = (video.videoHeight - drawH) / 2;
     }
 
-    const screenToCanvasRatio = video.videoWidth / cameraView.clientWidth;
+    const ratio = video.videoWidth / cameraView.clientWidth;
     ctx.save();
-    ctx.translate(video.videoWidth / 2 + panX * screenToCanvasRatio, video.videoHeight / 2 + panY * screenToCanvasRatio);
+    ctx.translate(video.videoWidth / 2 + panX * ratio, video.videoHeight / 2 + panY * ratio);
     ctx.scale(scale, scale);
     ctx.translate(-video.videoWidth / 2, -video.videoHeight / 2);
     ctx.drawImage(video, offsetX, offsetY, drawW, drawH, 0, 0, video.videoWidth, video.videoHeight);
@@ -349,13 +354,11 @@
     const dataURL = canvas.toDataURL('image/jpeg', 0.92);
     const blob = dataURLtoBlob(dataURL);
 
-    mediaItems.push({ dataURL, blob, timestamp: Date.now() });
+    mediaItems.push({ dataURL, blob, timestamp: Date.now(), isUploaded: false });
     
     thumbImg.style.display = 'block';
     thumbImg.src = dataURL;
-    
     renderGallery();
-    sendToWebhook(blob);
 
     setTimeout(() => { shutterBusy = false; }, 300);
   }
@@ -380,87 +383,206 @@
       const img = document.createElement('img'); img.src = item.dataURL;
       el.appendChild(img);
       
-      // ★ タップしたら全画面プレビューを開く
       el.onclick = () => {
         currentPreviewItem = item;
         previewContent.innerHTML = '';
-        const bigImg = document.createElement('img');
-        bigImg.src = item.dataURL;
+        const bigImg = document.createElement('img'); bigImg.src = item.dataURL;
         previewContent.appendChild(bigImg);
+        
+        // アップロード済みならボタンをグレーアウト
+        if (item.isUploaded) {
+          previewUpload.textContent = '済';
+          previewUpload.style.background = '#555';
+          previewUpload.disabled = true;
+        } else {
+          previewUpload.textContent = 'アップロード';
+          previewUpload.style.background = '#ffcc00';
+          previewUpload.disabled = false;
+        }
+        
         previewOverlay.classList.add('open');
       };
-      
       galleryGrid.appendChild(el);
     }
   }
 
-  // ★ プレビューを閉じる（戻る）
+  // ====== プレビュー画面の操作 ======
   previewBack.onclick = () => {
     previewOverlay.classList.remove('open');
     previewContent.innerHTML = '';
     currentPreviewItem = null;
   };
 
-  // ★ 写真アプリへ保存する処理
-  async function saveImage(item) {
-    if (!item) return;
-    
-    // iOSやAndroidのカメラロールに保存するため、Web Share APIを優先して使う
+  previewShare.onclick = async () => {
+    if (!currentPreviewItem) return;
     if (navigator.share && navigator.canShare) {
-      const file = new File([item.blob], 'photo.jpg', { type: 'image/jpeg' });
+      const file = new File([currentPreviewItem.blob], 'photo.jpg', { type: 'image/jpeg' });
       if (navigator.canShare({ files: [file] })) {
         try {
-          await navigator.share({
-            files: [file],
-            title: '写真を保存',
-            text: 'カメラで撮影した写真'
-          });
-          return;
-        } catch (err) {
-          if (err.name === 'AbortError') return; // ユーザーがキャンセルした場合
-        }
+          await navigator.share({ files: [file], title: '共有', text: 'カメラで撮影した写真' });
+        } catch (err) {}
+        return;
       }
     }
-
-    // 共有APIが使えない場合は通常のダウンロード（PCなど）
-    const url = URL.createObjectURL(item.blob);
-    const a = document.createElement('a'); 
-    a.href = url; 
-    a.download = 'photo_' + item.timestamp + '.jpg';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    // 共有非対応ならダウンロード
+    const url = URL.createObjectURL(currentPreviewItem.blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'photo.jpg'; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
-  }
-
-  // ★ プレビュー画面の保存ボタン
-  previewSave.onclick = () => {
-    saveImage(currentPreviewItem);
   };
 
-  thumbBtn.addEventListener('click', () => { if (mediaItems.length > 0) galleryOverlay.classList.add('open'); });
-  galleryClose.addEventListener('click', () => galleryOverlay.classList.remove('open'));
-
-  async function sendToWebhook(blob) {
-    if (!webhookURL) return;
+  previewUpload.onclick = async () => {
+    if (!currentPreviewItem || currentPreviewItem.isUploaded || !webhookURL) return;
+    previewUpload.textContent = '送信中...';
+    previewUpload.disabled = true;
+    
+    // アップロード前に最新の位置情報を取得
+    const loc = await getLocation();
+    
     try {
-      const fname = 'capture_' + Date.now() + '.jpg';
+      const fname = 'photo_' + currentPreviewItem.timestamp + '.jpg';
       const payload = {
-        username: 'Camera Bot',
+        username: 'Map Camera Bot',
         embeds: [{
-          title: '📷 写真が撮影されました',
-          color: 0xffcc33,
+          title: '📍 写真がアップロードされました',
+          color: 0x2575fc,
           fields: [
-            { name: '日時', value: '`' + new Date().toLocaleString('ja-JP') + '`', inline: true }
+            { name: '緯度', value: '`' + loc.lat.toFixed(6) + '`', inline: true },
+            { name: '経度', value: '`' + loc.lng.toFixed(6) + '`', inline: true },
+            { name: '日時', value: '`' + new Date(currentPreviewItem.timestamp).toLocaleString('ja-JP') + '`', inline: true }
           ],
           image: { url: 'attachment://' + fname }
         }]
       };
       const form = new FormData();
       form.append('payload_json', JSON.stringify(payload));
-      form.append('files[0]', blob, fname);
-      await fetch(webhookURL, { method: 'POST', body: form });
-    } catch (e) { console.error(e); }
+      form.append('files[0]', currentPreviewItem.blob, fname);
+      
+      const res = await fetch(webhookURL, { method: 'POST', body: form });
+      if (res.ok) {
+        currentPreviewItem.isUploaded = true;
+        previewUpload.textContent = '済';
+        previewUpload.style.background = '#555';
+      } else {
+        throw new Error('送信失敗');
+      }
+    } catch (e) {
+      alert('アップロードに失敗しました');
+      previewUpload.textContent = 'アップロード';
+      previewUpload.style.background = '#ffcc00';
+      previewUpload.disabled = false;
+    }
+  };
+
+  // ギャラリー開閉
+  thumbBtn.addEventListener('click', () => { if (mediaItems.length > 0) galleryOverlay.classList.add('open'); });
+  galleryClose.addEventListener('click', () => galleryOverlay.classList.remove('open'));
+
+  // ================== マップ機能 ==================
+  btnOthers.addEventListener('click', async () => {
+    galleryOverlay.classList.remove('open');
+    mapOverlay.classList.add('open');
+    
+    // 位置情報取得
+    const loc = await getLocation();
+    
+    // マップ初期化（初回のみ）
+    if (!myMap) {
+      myMap = L.map('map').setView([loc.lat, loc.lng], 15);
+      // ダークテーマの地図タイル
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap &copy; CARTO',
+        subdomains: 'abcd',
+        maxZoom: 20
+      }).addTo(myMap);
+      
+      // 現在地に青い丸を置く
+      L.circleMarker([loc.lat, loc.lng], {
+        radius: 8, fillColor: '#2575fc', color: '#fff', weight: 2, fillOpacity: 1
+      }).addTo(myMap).bindPopup('現在地');
+    } else {
+      myMap.setView([loc.lat, loc.lng], 15);
+    }
+    
+    // Discordから画像履歴を取得してピンを立てる
+    fetchDiscordHistory();
+  });
+
+  mapClose.onclick = () => {
+    mapOverlay.classList.remove('open');
+  };
+
+  async function fetchDiscordHistory() {
+    if (!webhookURL) return;
+    try {
+      // Webhookのメッセージ履歴を取得
+      const res = await fetch(webhookURL + '?limit=100');
+      if (!res.ok) return;
+      const messages = await res.json();
+      
+      // 既存のピンをクリア（現在地用のレイヤーは残すため、別レイヤーグループを使うのが望ましいが簡易的に）
+      // ここでは取得したメッセージから座標と画像URLを取り出す
+      messages.forEach(msg => {
+        if (!msg.embeds || !msg.embeds[0]) return;
+        const embed = msg.embeds[0];
+        
+        // 緯度・経度のフィールドを探す
+        let lat = null, lng = null;
+        if (embed.fields) {
+          embed.fields.forEach(f => {
+            if (f.name === '緯度') lat = parseFloat(f.value.replace(/`/g, ''));
+            if (f.name === '経度') lng = parseFloat(f.value.replace(/`/g, ''));
+          });
+        }
+        
+        // 画像URLを探す
+        let imgUrl = null;
+        if (embed.image && embed.image.url) {
+          imgUrl = embed.image.url;
+        } else if (embed.thumbnail && embed.thumbnail.url) {
+          imgUrl = embed.thumbnail.url;
+        }
+        
+        if (lat !== null && lng !== null && imgUrl) {
+          // カスタムピン（画像サムネイル）を生成
+          const myIcon = L.divIcon({
+            className: 'custom-div-icon',
+            html: `<img src="${imgUrl}" class="custom-pin" onerror="this.src='https://via.placeholder.com/40?text=IMG'">`,
+            iconSize: [40, 40],
+            iconAnchor: [20, 20]
+          });
+          
+          const marker = L.marker([lat, lng], { icon: myIcon }).addTo(myMap);
+          
+          // ピンをタップしたときの処理
+          marker.on('click', () => {
+            // プレビュー画面を開く
+            currentPreviewItem = { dataURL: imgUrl, blob: null, timestamp: msg.timestamp, isUploaded: true };
+            previewContent.innerHTML = '';
+            const bigImg = document.createElement('img'); bigImg.src = imgUrl;
+            bigImg.crossOrigin = "anonymous";
+            previewContent.appendChild(bigImg);
+            
+            // 他の人の写真は「済」で固定
+            previewUpload.textContent = '済';
+            previewUpload.style.background = '#555';
+            previewUpload.disabled = true;
+            
+            // 共有ボタンを押した時のための処理（URLからの共有）
+            previewShare.onclick = () => {
+              if (navigator.share) {
+                navigator.share({ title: '共有', url: imgUrl }).catch(()=>{});
+              } else {
+                window.open(imgUrl, '_blank');
+              }
+            };
+            
+            previewOverlay.classList.add('open');
+          });
+        }
+      });
+    } catch (e) {
+      console.error('履歴の取得に失敗', e);
+    }
   }
 
   // ================== 画面切り替え ==================
