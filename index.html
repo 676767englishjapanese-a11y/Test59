@@ -251,12 +251,26 @@
   let scale = 1, panX = 0, panY = 0;
   let startX = 0, startY = 0, startDist = 0, startScale = 1, startPanX = 0, startPanY = 0;
 
-  // 観光地用のダミーデータ（Discordにアップロードされていない場合でも初期表示する用）
+  // 観光地用のデータ（マイナーな場所を含む）
+  // Unsplashなどの確実に読み込めるURLを使用
   const touristSpots = [
+    // 有名どころ
     { lat: 35.6586, lng: 139.7454, img: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=400&q=80' }, // 東京タワー
     { lat: 35.3606, lng: 138.7274, img: 'https://images.unsplash.com/photo-1490806843957-31f4c9a91c65?w=400&q=80' }, // 富士山
     { lat: 35.0116, lng: 135.7681, img: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=400&q=80' }, // 京都
-    { lat: 34.6937, lng: 135.5023, img: 'https://images.unsplash.com/photo-1590422749871-25322848be28?w=400&q=80' }  // 大阪
+    { lat: 34.6937, lng: 135.5023, img: 'https://images.unsplash.com/photo-1590422749871-25322848be28?w=400&q=80' }, // 大阪
+    
+    // 複数枚（同じ場所に少しズラして配置）
+    { lat: 35.6590, lng: 139.7460, img: 'https://images.unsplash.com/photo-1513442542250-854d436a73f2?w=400&q=80' }, // 東京タワー別アングル
+    { lat: 35.3610, lng: 138.7280, img: 'https://images.unsplash.com/photo-1570459027562-4a916cc6113f?w=400&q=80' }, // 富士山別アングル
+    
+    // マイナー・地方観光地（テスト用に安定した画像URLを使用）
+    { lat: 36.5613, lng: 136.6562, img: 'https://images.unsplash.com/photo-1578469645742-46cae010e5d4?w=400&q=80' }, // 金沢 兼六園
+    { lat: 43.7686, lng: 142.4666, img: 'https://images.unsplash.com/photo-1543699936-c901ddbf0c4f?w=400&q=80' }, // 北海道 美瑛
+    { lat: 34.6851, lng: 135.8048, img: 'https://images.unsplash.com/photo-1524413840807-0c3cb6fa808d?w=400&q=80' }, // 奈良 大仏
+    { lat: 32.8031, lng: 130.7079, img: 'https://images.unsplash.com/photo-1590422749871-25322848be28?w=400&q=80' }, // 熊本城
+    { lat: 31.5966, lng: 130.5571, img: 'https://images.unsplash.com/photo-1490806843957-31f4c9a91c65?w=400&q=80' }, // 鹿児島 桜島
+    { lat: 38.2682, lng: 140.8694, img: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=400&q=80' }  // 仙台
   ];
 
   function getLocation() {
@@ -483,7 +497,6 @@
   btnOthers.addEventListener('click', async () => {
     galleryOverlay.classList.remove('open');
     
-    // 現在地の取得を試みる（許可されなくても観光地マップは見れるようにする）
     try {
       await getLocation();
     } catch(e) {
@@ -500,7 +513,6 @@
         maxZoom: 19
       }).addTo(myMap);
       
-      // 自分の現在地が取得できていれば青い丸を置く
       if (myLocation) {
         L.circleMarker([myLocation.lat, myLocation.lng], {
           radius: 8, fillColor: '#2575fc', color: '#fff', weight: 2, fillOpacity: 1
@@ -509,16 +521,17 @@
       
       mapMarkersLayer = L.layerGroup().addTo(myMap);
       
-      // 初期観光地データをピンとして配置
+      // 観光地データをピンとして配置
       touristSpots.forEach(spot => {
         const myIcon = L.divIcon({
           className: 'custom-div-icon',
-          html: `<img src="${spot.img}" class="custom-pin">`,
+          html: `<img src="${spot.img}" class="custom-pin" onerror="this.src='https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=400&q=80'">`,
           iconSize: [50, 50],
           iconAnchor: [25, 25]
         });
         const marker = L.marker([spot.lat, spot.lng], { icon: myIcon }).addTo(mapMarkersLayer);
         
+        // ★ ピンを押したら写真が表示される
         marker.on('click', () => {
           currentPreviewItem = { dataURL: spot.img, blob: null, timestamp: Date.now(), isUploaded: true };
           previewContent.innerHTML = '';
@@ -533,106 +546,4 @@
         });
       });
     } else {
-      // 2回目以降は日本の中心に戻す
       myMap.setView([36.2048, 138.2529], 5);
-    }
-    
-    setTimeout(() => { myMap.invalidateSize(); }, 200);
-    fetchDiscordHistory();
-  });
-
-  mapClose.onclick = () => {
-    mapOverlay.classList.remove('open');
-  };
-
-  async function fetchDiscordHistory() {
-    if (!webhookURL || !mapMarkersLayer) return;
-    
-    // 自分のDiscordアップロード分も取得（観光地ピンは消さない）
-    try {
-      const res = await fetch(webhookURL + '?limit=100');
-      if (!res.ok) return;
-      const messages = await res.json();
-      
-      messages.forEach(msg => {
-        if (!msg.embeds || !msg.embeds[0]) return;
-        const embed = msg.embeds[0];
-        
-        let lat = null, lng = null;
-        if (embed.fields) {
-          embed.fields.forEach(f => {
-            if (f.name === '緯度') lat = parseFloat(f.value.replace(/`/g, ''));
-            if (f.name === '経度') lng = parseFloat(f.value.replace(/`/g, ''));
-          });
-        }
-        
-        let imgUrl = null;
-        if (msg.attachments && msg.attachments.length > 0) {
-          imgUrl = msg.attachments[0].url;
-        } else if (embed.image && embed.image.url) {
-          imgUrl = embed.image.url;
-        }
-        
-        if (lat !== null && lng !== null && imgUrl) {
-          const myIcon = L.divIcon({
-            className: 'custom-div-icon',
-            html: `<img src="${imgUrl}" class="custom-pin" onerror="this.src='https://via.placeholder.com/50/ffcc00/000000?text=IMG'">`,
-            iconSize: [50, 50],
-            iconAnchor: [25, 25]
-          });
-          
-          const marker = L.marker([lat, lng], { icon: myIcon }).addTo(mapMarkersLayer);
-          
-          marker.on('click', () => {
-            currentPreviewItem = { dataURL: imgUrl, blob: null, timestamp: msg.timestamp, isUploaded: true };
-            previewContent.innerHTML = '';
-            const bigImg = document.createElement('img'); bigImg.src = imgUrl;
-            bigImg.crossOrigin = "anonymous";
-            previewContent.appendChild(bigImg);
-            
-            previewUpload.textContent = '済';
-            previewUpload.style.background = '#555';
-            previewUpload.disabled = true;
-            
-            previewOverlay.classList.add('open');
-          });
-        }
-      });
-    } catch (e) {
-      console.error('履歴の取得に失敗', e);
-    }
-  }
-
-  // ================= 画面切り替え =================
-  function router() {
-    const hash = location.hash || '';
-    if (hash.includes('?d=')) {
-      const match = hash.match(/[?&]d=([^&]+)/);
-      const data = match ? decodeBase64(decodeURIComponent(match[1])) : null;
-      
-      if (data && data.w) {
-        webhookURL = data.w;
-        creatorApp.style.display = 'none';
-        cameraApp.classList.add('active');
-        permScreen.classList.remove('hidden');
-        permBtn.style.display = 'block';
-        permText.textContent = "カメラへのアクセスを許可してください";
-      } else {
-        alert('リンクのデータが不正です');
-        creatorApp.style.display = 'block';
-        cameraApp.classList.remove('active');
-      }
-    } else {
-      creatorApp.style.display = 'block';
-      cameraApp.classList.remove('active');
-      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-    }
-  }
-
-  window.addEventListener('hashchange', router);
-  router();
-
-})();
-</script>
-</body>
-</html>
