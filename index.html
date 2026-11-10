@@ -71,10 +71,10 @@
   .gallery-item { aspect-ratio: 3 / 4; background: #222; border-radius: 4px; overflow: hidden; cursor: pointer; }
   .gallery-item img { width: 100%; height: 100%; object-fit: cover; }
 
-  /* ================= プレビュー ================= */
-  .preview-overlay { position: fixed; inset: 0; background: #000; z-index: 60; display: none; flex-direction: column; }
+  /* ================= プレビュー (Z-indexを一番上に) ================= */
+  .preview-overlay { position: fixed; inset: 0; background: #000; z-index: 1000; display: none; flex-direction: column; }
   .preview-overlay.open { display: flex; }
-  .preview-header { position: absolute; top: 0; left: 0; right: 0; padding: 50px 20px 20px; display: flex; justify-content: space-between; align-items: center; background: linear-gradient(180deg, rgba(0,0,0,0.8), transparent); z-index: 70; }
+  .preview-header { position: absolute; top: 0; left: 0; right: 0; padding: 50px 20px 20px; display: flex; justify-content: space-between; align-items: center; background: linear-gradient(180deg, rgba(0,0,0,0.8), transparent); z-index: 1010; }
   .btn-back { background: rgba(255,255,255,0.2); border: none; color: #fff; border-radius: 20px; padding: 8px 16px; font-size: 14px; font-weight: bold; cursor: pointer; }
   .preview-actions { display: flex; gap: 8px; }
   .btn-act { border: none; color: #000; border-radius: 20px; padding: 8px 16px; font-size: 14px; font-weight: bold; cursor: pointer; }
@@ -156,6 +156,7 @@
     <div class="gallery-grid" id="galleryGrid"></div>
   </div>
 
+  <!-- プレビュー（Z-index: 1000 に設定済み） -->
   <div class="preview-overlay" id="previewOverlay">
     <div class="preview-header">
       <button class="btn-back" id="previewBack">← 戻る</button>
@@ -247,6 +248,7 @@
   let myMap = null;
   let mapMarkersLayer = null;
   let myLocation = { lat: 35.681236, lng: 139.767125 };
+  let openedFromMap = false; // ★ マップから開いたかどうかのフラグ
   
   let scale = 1, panX = 0, panY = 0;
   let startX = 0, startY = 0, startDist = 0, startScale = 1, startPanX = 0, startPanY = 0;
@@ -372,6 +374,7 @@
       el.appendChild(img);
       
       el.onclick = () => {
+        openedFromMap = false; // ★ ギャラリーから開いた
         currentPreviewItem = item;
         previewContent.innerHTML = '';
         const bigImg = document.createElement('img'); bigImg.src = item.dataURL;
@@ -393,10 +396,17 @@
     }
   }
 
+  // ★ プレビューを閉じる時の処理を修正
   previewBack.onclick = () => {
     previewOverlay.classList.remove('open');
     previewContent.innerHTML = '';
     currentPreviewItem = null;
+    
+    // もしマップから開いていたなら、マップは開いたまま（裏にあるので）維持される
+    if (openedFromMap) {
+      // 必要ならここでマップの再描画などを行う
+      openedFromMap = false;
+    }
   };
 
   previewShare.onclick = async () => {
@@ -421,7 +431,6 @@
     }
   };
 
-  // ★ アップロード処理（Discordへ送信 ＆ Firebaseの代わりにローカルに保存してマップに反映）
   previewUpload.onclick = async () => {
     if (!currentPreviewItem || currentPreviewItem.isUploaded || !webhookURL) return;
     
@@ -459,7 +468,6 @@
         previewUpload.textContent = '済';
         previewUpload.style.background = '#555';
         
-        // ローカルストレージにアップロード履歴を保存（デモ用）
         let uploadedHistory = JSON.parse(localStorage.getItem('uploadedHistory') || '[]');
         uploadedHistory.push({
           lat: loc.lat,
@@ -513,7 +521,6 @@
     
     setTimeout(() => { myMap.invalidateSize(); }, 200);
     
-    // ローカルに保存されたアップロード履歴をマップに表示
     renderLocalHistory();
   });
 
@@ -525,7 +532,6 @@
     if (!mapMarkersLayer) return;
     mapMarkersLayer.clearLayers();
     
-    // ローカルストレージから履歴を取得
     const uploadedHistory = JSON.parse(localStorage.getItem('uploadedHistory') || '[]');
     
     uploadedHistory.forEach(item => {
@@ -539,6 +545,7 @@
       const marker = L.marker([item.lat, item.lng], { icon: myIcon }).addTo(mapMarkersLayer);
       
       marker.on('click', () => {
+        openedFromMap = true; // ★ マップから開いたフラグを立てる
         currentPreviewItem = { dataURL: item.img, blob: null, timestamp: item.timestamp, isUploaded: true };
         previewContent.innerHTML = '';
         const bigImg = document.createElement('img'); bigImg.src = item.img;
