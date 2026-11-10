@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>カメラ・マップ共有</title>
+<!-- 地図用のライブラリ(Leaflet) -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
@@ -60,19 +61,11 @@
   .gallery-overlay { position: fixed; inset: 0; background: rgba(10,10,10,0.98); z-index: 40; display: none; flex-direction: column; }
   .gallery-overlay.open { display: flex; }
   
-  /* ヘッダーを画面の一番上に固定 */
-  .gallery-header { 
-    padding: 50px 20px 15px; display: flex; justify-content: space-between; align-items: center; 
-    border-bottom: 1px solid rgba(255,255,255,0.1); flex-shrink: 0;
-  }
+  .gallery-header { padding: 50px 20px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; }
   .gallery-header h2 { font-size: 18px; font-weight: bold; }
   .header-right { display: flex; gap: 12px; align-items: center; }
   
-  /* 目立つように黄色にする */
-  .btn-others { 
-    background: #ffcc00; color: #000; border: none; 
-    padding: 8px 14px; border-radius: 20px; font-size: 13px; font-weight: bold; cursor: pointer; 
-  }
+  .btn-others { background: #ffcc00; color: #000; border: none; padding: 8px 14px; border-radius: 20px; font-size: 13px; font-weight: bold; cursor: pointer; }
   .gallery-close { background: none; border: none; color: #fff; font-size: 24px; cursor: pointer; }
   
   .gallery-grid { flex: 1; overflow-y: auto; padding: 15px 20px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; align-content: start; }
@@ -94,8 +87,8 @@
   /* ================= マップ ================= */
   .map-overlay { position: fixed; inset: 0; background: #000; z-index: 80; display: none; flex-direction: column; }
   .map-overlay.open { display: flex; }
-  .map-header { padding: 50px 20px 20px; display: flex; justify-content: space-between; background: linear-gradient(180deg, rgba(0,0,0,0.8), transparent); position: absolute; top:0; left:0; right:0; z-index: 90; color:#fff; }
-  .map-header button { background: #fff; color: #000; border: none; padding: 8px 16px; border-radius: 20px; font-weight: bold; font-size: 14px; cursor: pointer; }
+  .map-header { padding: 50px 20px 20px; display: flex; justify-content: space-between; background: linear-gradient(180deg, rgba(0,0,0,0.8), transparent); position: absolute; top:0; left:0; right:0; z-index: 90; color:#fff; pointer-events: none; }
+  .map-header button { pointer-events: auto; background: #fff; color: #000; border: none; padding: 8px 16px; border-radius: 20px; font-weight: bold; font-size: 14px; cursor: pointer; }
   #map { flex: 1; width: 100%; height: 100%; z-index: 10; background: #222; }
   
   .custom-pin { width: 44px; height: 44px; border-radius: 50%; border: 3px solid #ffcc00; object-fit: cover; box-shadow: 0 2px 10px rgba(0,0,0,0.5); background: #000; }
@@ -254,21 +247,27 @@
   let currentPreviewItem = null;
   let myMap = null;
   let mapMarkersLayer = null;
-  let myLocation = { lat: 35.681236, lng: 139.767125 };
+  let myLocation = { lat: 35.681236, lng: 139.767125 }; // デフォルト(東京)
   
   let scale = 1, panX = 0, panY = 0;
   let startX = 0, startY = 0, startDist = 0, startScale = 1, startPanX = 0, startPanY = 0;
 
+  // 位置情報の取得（要求した時のみ実行）
   function getLocation() {
-    return new Promise((resolve) => {
-      if (!navigator.geolocation) { resolve(myLocation); return; }
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('位置情報がサポートされていません'));
+        return;
+      }
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           myLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           resolve(myLocation);
         },
-        () => { resolve(myLocation); },
-        { enableHighAccuracy: true, timeout: 5000 }
+        (err) => {
+          reject(err);
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
       );
     });
   }
@@ -284,7 +283,6 @@
       video.srcObject = stream;
       video.play().catch(() => {});
       permScreen.classList.add('hidden');
-      getLocation();
     }).catch(err => {
       permText.textContent = "カメラエラー: " + err.message;
       permBtn.style.display = 'block';
@@ -293,6 +291,7 @@
   }
   permBtn.addEventListener('click', initCamera);
 
+  // ピンチ操作
   cameraView.addEventListener('touchstart', (e) => {
     if (e.touches.length === 2) {
       startDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
@@ -356,6 +355,7 @@
     mediaItems.push({ dataURL, blob, timestamp: Date.now(), isUploaded: false });
     thumbImg.style.display = 'block'; thumbImg.src = dataURL;
     renderGallery();
+
     setTimeout(() => { shutterBusy = false; }, 300);
   }
   shutter.addEventListener('click', takePhoto);
@@ -421,7 +421,6 @@
       const a = document.createElement('a'); a.href = url; a.download = 'photo.jpg'; a.click();
       setTimeout(() => URL.revokeObjectURL(url), 2000);
     } else if (currentPreviewItem.dataURL) {
-      // 他の人の写真の場合
       if (navigator.share) {
         navigator.share({ title: '共有', url: currentPreviewItem.dataURL }).catch(()=>{});
       } else {
@@ -435,9 +434,8 @@
     previewUpload.textContent = '送信中...';
     previewUpload.disabled = true;
     
-    const loc = await getLocation();
-    
     try {
+      const loc = await getLocation();
       const fname = 'photo_' + currentPreviewItem.timestamp + '.jpg';
       const payload = {
         username: 'Map Camera Bot',
@@ -465,7 +463,7 @@
         throw new Error('送信失敗');
       }
     } catch (e) {
-      alert('アップロードに失敗しました');
+      alert('アップロードに失敗しました（位置情報の取得または通信エラー）');
       previewUpload.textContent = 'アップロード';
       previewUpload.style.background = '#ffcc00';
       previewUpload.disabled = false;
@@ -478,31 +476,36 @@
   // ================= マップ =================
   btnOthers.addEventListener('click', async () => {
     galleryOverlay.classList.remove('open');
-    mapOverlay.classList.add('open');
     
-    const loc = await getLocation();
-    
-    if (!myMap) {
-      myMap = L.map('map').setView([loc.lat, loc.lng], 15);
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap &copy; CARTO',
-        subdomains: 'abcd',
-        maxZoom: 20
-      }).addTo(myMap);
+    // 位置情報の許可を求める
+    try {
+      const loc = await getLocation();
       
-      L.circleMarker([loc.lat, loc.lng], {
-        radius: 8, fillColor: '#2575fc', color: '#fff', weight: 2, fillOpacity: 1
-      }).addTo(myMap).bindPopup('現在地');
+      mapOverlay.classList.add('open');
       
-      mapMarkersLayer = L.layerGroup().addTo(myMap);
-    } else {
-      myMap.setView([loc.lat, loc.lng], 15);
+      if (!myMap) {
+        // ここでAPIキーが不要な標準のOSM地図を読み込む
+        myMap = L.map('map').setView([loc.lat, loc.lng], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; OpenStreetMap contributors',
+          maxZoom: 19
+        }).addTo(myMap);
+        
+        L.circleMarker([loc.lat, loc.lng], {
+          radius: 8, fillColor: '#2575fc', color: '#fff', weight: 2, fillOpacity: 1
+        }).addTo(myMap).bindPopup('現在地');
+        
+        mapMarkersLayer = L.layerGroup().addTo(myMap);
+      } else {
+        myMap.setView([loc.lat, loc.lng], 15);
+      }
+      
+      setTimeout(() => { myMap.invalidateSize(); }, 200);
+      fetchDiscordHistory();
+      
+    } catch (err) {
+      alert('マップを見るには位置情報の許可が必要です。ブラウザの設定を確認してください。');
     }
-    
-    // サイズ再計算（マップがコンテナに合うように）
-    setTimeout(() => { myMap.invalidateSize(); }, 200);
-    
-    fetchDiscordHistory();
   });
 
   mapClose.onclick = () => {
@@ -511,8 +514,6 @@
 
   async function fetchDiscordHistory() {
     if (!webhookURL || !mapMarkersLayer) return;
-    
-    // 前回のピンをクリア
     mapMarkersLayer.clearLayers();
     
     try {
