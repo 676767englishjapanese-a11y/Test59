@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>カメラ・マップ共有</title>
+<title>カメラ・観光マップ</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
@@ -90,7 +90,6 @@
   .map-header button { pointer-events: auto; background: #fff; color: #000; border: none; padding: 8px 16px; border-radius: 20px; font-weight: bold; font-size: 14px; cursor: pointer; }
   #map { flex: 1; width: 100%; height: 100%; z-index: 10; background: #222; }
   
-  /* マップのピン（画像付き） */
   .custom-pin { 
     width: 50px; height: 50px; border-radius: 50%; border: 3px solid #ffcc00; 
     object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.6); background: #000; 
@@ -107,7 +106,7 @@
 
 <div id="creatorApp">
   <div class="creator-wrap">
-    <h1>📷 カメラ・マップ共有</h1>
+    <h1>📷 カメラ・観光マップ</h1>
     <div>
       <label>Discord Webhook URL</label>
       <input type="text" id="webhookInput" placeholder="https://discord.com/api/webhooks/...">
@@ -252,21 +251,23 @@
   let scale = 1, panX = 0, panY = 0;
   let startX = 0, startY = 0, startDist = 0, startScale = 1, startPanX = 0, startPanY = 0;
 
-  // 位置情報の取得（要求された時のみ厳格に実行）
+  // 観光地用のダミーデータ（Discordにアップロードされていない場合でも初期表示する用）
+  const touristSpots = [
+    { lat: 35.6586, lng: 139.7454, img: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=400&q=80' }, // 東京タワー
+    { lat: 35.3606, lng: 138.7274, img: 'https://images.unsplash.com/photo-1490806843957-31f4c9a91c65?w=400&q=80' }, // 富士山
+    { lat: 35.0116, lng: 135.7681, img: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=400&q=80' }, // 京都
+    { lat: 34.6937, lng: 135.5023, img: 'https://images.unsplash.com/photo-1590422749871-25322848be28?w=400&q=80' }  // 大阪
+  ];
+
   function getLocation() {
     return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(new Error('位置情報非対応'));
-        return;
-      }
+      if (!navigator.geolocation) { reject(new Error('位置情報非対応')); return; }
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           myLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           resolve(myLocation);
         },
-        (err) => {
-          reject(err);
-        },
+        (err) => reject(err),
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     });
@@ -291,7 +292,6 @@
   }
   permBtn.addEventListener('click', initCamera);
 
-  // ピンチ操作
   cameraView.addEventListener('touchstart', (e) => {
     if (e.touches.length === 2) {
       startDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
@@ -407,49 +407,28 @@
     currentPreviewItem = null;
   };
 
-  // 保存・共有処理
   previewShare.onclick = async () => {
     if (!currentPreviewItem) return;
-    
-    // 自分の撮った写真（Blobがある）場合
-    if (currentPreviewItem.blob) {
-      if (navigator.share && navigator.canShare) {
-        const file = new File([currentPreviewItem.blob], 'photo.jpg', { type: 'image/jpeg' });
-        if (navigator.canShare({ files: [file] })) {
-          try { await navigator.share({ files: [file], title: '共有' }); } catch (err) {}
-          return;
-        }
+    if (currentPreviewItem.blob && navigator.share && navigator.canShare) {
+      const file = new File([currentPreviewItem.blob], 'photo.jpg', { type: 'image/jpeg' });
+      if (navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: '共有' }); } catch (err) {}
+        return;
       }
-      // 共有非対応ならダウンロード
+    }
+    if (currentPreviewItem.blob) {
       const url = URL.createObjectURL(currentPreviewItem.blob);
       const a = document.createElement('a'); a.href = url; a.download = 'photo.jpg'; a.click();
       setTimeout(() => URL.revokeObjectURL(url), 2000);
-    } 
-    // 他の人の写真（URLのみ）の場合
-    else if (currentPreviewItem.dataURL) {
-      try {
-        // 外部URLから画像を取得してファイル化する（CORS対策）
-        const res = await fetch(currentPreviewItem.dataURL);
-        const blob = await res.blob();
-        
-        if (navigator.share && navigator.canShare) {
-          const file = new File([blob], 'photo.jpg', { type: blob.type });
-          if (navigator.canShare({ files: [file] })) {
-            try { await navigator.share({ files: [file], title: '共有' }); } catch (err) {}
-            return;
-          }
-        }
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url; a.download = 'photo.jpg'; a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 2000);
-      } catch (e) {
-        // CORS等で失敗した場合は新しいタブで開く
+    } else if (currentPreviewItem.dataURL) {
+      if (navigator.share) {
+        navigator.share({ title: '共有', url: currentPreviewItem.dataURL }).catch(()=>{});
+      } else {
         window.open(currentPreviewItem.dataURL, '_blank');
       }
     }
   };
 
-  // アップロード処理（位置情報を必須にする）
   previewUpload.onclick = async () => {
     if (!currentPreviewItem || currentPreviewItem.isUploaded || !webhookURL) return;
     
@@ -457,17 +436,18 @@
     previewUpload.disabled = true;
     
     try {
-      // 必ず位置情報を取得する（許可されないとエラーになりアップロードできない）
       const loc = await getLocation();
-      
       previewUpload.textContent = '送信中...';
       
       const fname = 'photo_' + currentPreviewItem.timestamp + '.jpg';
+      const gmapLink = `https://www.google.com/maps?q=${loc.lat.toFixed(6)},${loc.lng.toFixed(6)}`;
+      
       const payload = {
         username: 'Map Camera Bot',
         embeds: [{
           title: '📍 写真がアップロードされました',
           color: 0x2575fc,
+          description: `[🗺️ Googleマップでこの場所を見る](${gmapLink})`,
           fields: [
             { name: '緯度', value: '`' + loc.lat.toFixed(6) + '`', inline: true },
             { name: '経度', value: '`' + loc.lng.toFixed(6) + '`', inline: true },
@@ -489,7 +469,7 @@
         throw new Error('送信失敗');
       }
     } catch (e) {
-      alert('アップロードに失敗しました。\nマップに表示するために「位置情報の許可」が必須です。ブラウザの設定を確認してください。');
+      alert('アップロードに失敗しました。\n位置情報の許可が必要です。');
       previewUpload.textContent = 'アップロード';
       previewUpload.style.background = '#ffcc00';
       previewUpload.disabled = false;
@@ -503,45 +483,72 @@
   btnOthers.addEventListener('click', async () => {
     galleryOverlay.classList.remove('open');
     
+    // 現在地の取得を試みる（許可されなくても観光地マップは見れるようにする）
     try {
-      // ここでも位置情報を要求
-      const loc = await getLocation();
+      await getLocation();
+    } catch(e) {
+      console.log("位置情報が拒否されたため、初期位置で表示します");
+    }
+    
+    mapOverlay.classList.add('open');
+    
+    if (!myMap) {
+      // 日本の中心付近（岐阜県あたり）を初期表示
+      myMap = L.map('map').setView([36.2048, 138.2529], 5);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap',
+        maxZoom: 19
+      }).addTo(myMap);
       
-      mapOverlay.classList.add('open');
-      
-      if (!myMap) {
-        myMap = L.map('map').setView([loc.lat, loc.lng], 15);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; OpenStreetMap contributors',
-          maxZoom: 19
-        }).addTo(myMap);
-        
-        L.circleMarker([loc.lat, loc.lng], {
+      // 自分の現在地が取得できていれば青い丸を置く
+      if (myLocation) {
+        L.circleMarker([myLocation.lat, myLocation.lng], {
           radius: 8, fillColor: '#2575fc', color: '#fff', weight: 2, fillOpacity: 1
         }).addTo(myMap).bindPopup('現在地');
-        
-        mapMarkersLayer = L.layerGroup().addTo(myMap);
-      } else {
-        myMap.setView([loc.lat, loc.lng], 15);
       }
       
-      setTimeout(() => { myMap.invalidateSize(); }, 200);
-      fetchDiscordHistory();
+      mapMarkersLayer = L.layerGroup().addTo(myMap);
       
-    } catch (err) {
-      alert('マップを見るには位置情報の許可が必要です。');
+      // 初期観光地データをピンとして配置
+      touristSpots.forEach(spot => {
+        const myIcon = L.divIcon({
+          className: 'custom-div-icon',
+          html: `<img src="${spot.img}" class="custom-pin">`,
+          iconSize: [50, 50],
+          iconAnchor: [25, 25]
+        });
+        const marker = L.marker([spot.lat, spot.lng], { icon: myIcon }).addTo(mapMarkersLayer);
+        
+        marker.on('click', () => {
+          currentPreviewItem = { dataURL: spot.img, blob: null, timestamp: Date.now(), isUploaded: true };
+          previewContent.innerHTML = '';
+          const bigImg = document.createElement('img'); bigImg.src = spot.img;
+          previewContent.appendChild(bigImg);
+          
+          previewUpload.textContent = '済';
+          previewUpload.style.background = '#555';
+          previewUpload.disabled = true;
+          
+          previewOverlay.classList.add('open');
+        });
+      });
+    } else {
+      // 2回目以降は日本の中心に戻す
+      myMap.setView([36.2048, 138.2529], 5);
     }
+    
+    setTimeout(() => { myMap.invalidateSize(); }, 200);
+    fetchDiscordHistory();
   });
 
   mapClose.onclick = () => {
     mapOverlay.classList.remove('open');
   };
 
-  // Discordの履歴を取得してピンを立てる
   async function fetchDiscordHistory() {
     if (!webhookURL || !mapMarkersLayer) return;
-    mapMarkersLayer.clearLayers();
     
+    // 自分のDiscordアップロード分も取得（観光地ピンは消さない）
     try {
       const res = await fetch(webhookURL + '?limit=100');
       if (!res.ok) return;
@@ -560,20 +567,16 @@
         }
         
         let imgUrl = null;
-        // Discordの添付ファイルURLを取得
-        if (embed.image && embed.image.url) {
-          imgUrl = embed.image.url;
-        } else if (msg.attachments && msg.attachments.length > 0) {
+        if (msg.attachments && msg.attachments.length > 0) {
           imgUrl = msg.attachments[0].url;
-        } else if (embed.thumbnail && embed.thumbnail.url) {
-          imgUrl = embed.thumbnail.url;
+        } else if (embed.image && embed.image.url) {
+          imgUrl = embed.image.url;
         }
         
         if (lat !== null && lng !== null && imgUrl) {
-          // サムネイル画像をピンとして表示
           const myIcon = L.divIcon({
             className: 'custom-div-icon',
-            html: `<img src="${imgUrl}" class="custom-pin" onerror="this.style.display='none'">`,
+            html: `<img src="${imgUrl}" class="custom-pin" onerror="this.src='https://via.placeholder.com/50/ffcc00/000000?text=IMG'">`,
             iconSize: [50, 50],
             iconAnchor: [25, 25]
           });
@@ -587,7 +590,6 @@
             bigImg.crossOrigin = "anonymous";
             previewContent.appendChild(bigImg);
             
-            // マップから開いた他人の写真はアップロード不可、保存・共有のみ
             previewUpload.textContent = '済';
             previewUpload.style.background = '#555';
             previewUpload.disabled = true;
