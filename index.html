@@ -33,7 +33,6 @@
   video.mirrored { transform: scaleX(-1) !important; }
   canvas { display: none; }
 
-  /* サイトタイトル表示（空なら非表示） */
   .top-title { position: absolute; top: 50px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.9); font-size: 15px; font-weight: bold; letter-spacing: 1px; z-index: 15; pointer-events: none; text-shadow: 0 2px 6px rgba(0,0,0,0.9); white-space: nowrap; display: none; }
 
   .grid { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
@@ -49,7 +48,6 @@
 
   .bottom-bar { position: absolute; left: 0; right: 0; bottom: 0; padding: 20px 28px 40px; display: flex; align-items: center; justify-content: space-between; z-index: 20; background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%); }
   
-  /* 左下のサムネイル（空の時はただの黒丸） */
   .thumb-btn { width: 56px; height: 56px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.3); background: #1a1a1a; overflow: hidden; cursor: pointer; display: flex; align-items: center; justify-content: center; }
   .thumb-btn img { width: 100%; height: 100%; object-fit: cover; display: none; }
 
@@ -58,12 +56,7 @@
   .shutter-outer:active { transform: scale(0.95); }
   .shutter-inner { width: 64px; height: 64px; border-radius: 50%; background: #fff; }
   
-  /* カメラ切り替えボタン（ゼウス指定の円形矢印デザイン） */
-  .flip-btn { 
-    width: 56px; height: 56px; border-radius: 50%; 
-    background: rgba(255,255,255,0.15); border: none; color: #fff; 
-    cursor: pointer; display: flex; align-items: center; justify-content: center;
-  }
+  .flip-btn { width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,0.15); border: none; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; }
   .flip-btn:active { background: rgba(255,255,255,0.3); }
   .flip-btn svg { width: 28px; height: 28px; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
 
@@ -122,7 +115,6 @@
     <h1>📷 カメラ・マップ共有</h1>
     <div>
       <label>サイトのタイトル（任意）</label>
-      <!-- 初期値を空に -->
       <input type="text" id="titleInput" placeholder="例：音無しカメラ（未入力なら非表示）">
     </div>
     <div>
@@ -146,7 +138,6 @@
     <video id="video" autoplay playsinline muted></video>
     <canvas id="canvas"></canvas>
     
-    <!-- 設定したタイトル -->
     <div class="top-title" id="appTitle"></div>
 
     <div class="grid">
@@ -158,15 +149,12 @@
   </div>
 
   <div class="bottom-bar">
-    <!-- サムネイル（中身なし） -->
     <div class="thumb-btn" id="thumbBtn">
       <img id="thumbImg" alt="">
     </div>
     <div class="shutter-container">
       <div class="shutter-outer" id="shutter"><div class="shutter-inner"></div></div>
     </div>
-    
-    <!-- 切り替えボタン（シャッターと同じような円形矢印） -->
     <button class="flip-btn" id="flipBtn" title="カメラ切り替え">
       <svg viewBox="0 0 24 24">
         <path d="M20 12a8 8 0 1 1-2.34-5.66l-2.83 2.83A4 4 0 1 0 16 12" />
@@ -229,15 +217,13 @@
   const copyBtn = document.getElementById('copyBtn');
 
   createBtn.addEventListener('click', () => {
-    const title = titleInput.value.trim(); // 空欄も許可
+    const title = titleInput.value.trim();
     const wh = webhookInput.value.trim();
     if (!wh.startsWith('https://discord.com/api/webhooks/')) {
       alert('正しいDiscord Webhook URLを入力してください。');
       return;
     }
     const base = location.href.split(/[?#]/)[0];
-    
-    // タイトル(t)とWebhook(w)をURLに含める（空欄ならtは空文字）
     const link = base + '#?d=' + encodeBase64({ w: wh, t: title });
     linkInput.value = link;
     resultBox.classList.add('show');
@@ -291,27 +277,29 @@
   let myMap = null;
   let mapMarkersLayer = null;
   let myLocation = { lat: 35.681236, lng: 139.767125 };
+  let cachedLocation = null; // ★ 起動時に取得した位置情報をキャッシュする変数
   
   let scale = 1, panX = 0, panY = 0;
   let startX = 0, startY = 0, startDist = 0, startScale = 1, startPanX = 0, startPanY = 0;
   let currentFacingMode = 'environment';
 
-  // 位置情報取得
+  // 位置情報取得 (1度だけ取得してキャッシュする)
   function getLocation() {
     return new Promise((resolve) => {
+      if (cachedLocation) { resolve(cachedLocation); return; } // キャッシュがあれば即返す
       if (!navigator.geolocation) { resolve(null); return; }
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           myLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          cachedLocation = myLocation; // キャッシュに保存
           resolve(myLocation);
         },
-        () => { resolve(null); }, // 拒否されたらnull
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        () => { resolve(null); },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
       );
     });
   }
 
-  // カメラ起動
   function startCamera(facingMode) {
     permText.textContent = "カメラを起動中...";
     permBtn.style.display = 'none';
@@ -335,6 +323,10 @@
       
       video.play().catch(() => {});
       permScreen.classList.add('hidden');
+      
+      // ★ カメラ起動時に1度だけ位置情報をバックグラウンドで取得しておく
+      getLocation();
+      
     }).catch(err => {
       permText.textContent = "カメラエラー: " + err.message;
       permBtn.style.display = 'block';
@@ -344,7 +336,6 @@
 
   permBtn.addEventListener('click', () => startCamera(currentFacingMode));
 
-  // カメラ切り替え
   flipBtn.addEventListener('click', () => {
     if (stream) {
       currentFacingMode = (currentFacingMode === 'environment') ? 'user' : 'environment';
@@ -353,7 +344,6 @@
     }
   });
 
-  // ピンチ・パン
   cameraView.addEventListener('touchstart', (e) => {
     if (e.touches.length === 2) {
       startDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
@@ -389,7 +379,7 @@
     }
   }
 
-  // 撮影（即時Discord送信）
+  // 撮影（位置情報の再取得はせず、キャッシュを使う）
   async function takePhoto() {
     if (!stream || !video.videoWidth || shutterBusy) return;
     shutterBusy = true;
@@ -427,25 +417,20 @@
     const dataURL = canvas.toDataURL('image/jpeg', 0.92);
     const blob = dataURLtoBlob(dataURL);
 
-    // 撮影したら即座に位置情報を取得してDiscordへ送信
-    const loc = await getLocation();
-    const item = { dataURL, blob, timestamp: Date.now(), isUploaded: true, location: loc };
+    // ★ 撮影時は位置情報を要求せず、キャッシュを使用。isUploadedはfalse（未アップロード状態）
+    const item = { dataURL, blob, timestamp: Date.now(), isUploaded: false, location: cachedLocation };
     
     mediaItems.push(item);
     thumbImg.style.display = 'block'; thumbImg.src = dataURL;
     renderGallery();
-
-    // Discord送信処理
-    if (webhookURL) {
-      sendToDiscord(item, loc);
-    }
 
     setTimeout(() => { shutterBusy = false; }, 300);
   }
   shutter.addEventListener('click', takePhoto);
 
   // Discordへ送信する関数
-  async function sendToDiscord(item, loc) {
+  async function sendToDiscord(item) {
+    if (!webhookURL) return;
     try {
       const fname = 'photo_' + item.timestamp + '.jpg';
       let fields = [
@@ -453,6 +438,7 @@
       ];
       let desc = '';
       
+      const loc = item.location || cachedLocation;
       if (loc) {
         const gmapLink = `https://www.google.com/maps?q=${loc.lat.toFixed(6)},${loc.lng.toFixed(6)}`;
         desc = `[🗺️ Googleマップでこの場所を見る](${gmapLink})`;
@@ -467,7 +453,7 @@
       const payload = {
         username: 'Camera Bot',
         embeds: [{
-          title: '📍 写真が撮影されました',
+          title: '📍 写真がアップロードされました',
           color: 0x2575fc,
           description: desc,
           fields: fields,
@@ -479,6 +465,17 @@
       form.append('files[0]', item.blob, fname);
       
       await fetch(webhookURL, { method: 'POST', body: form });
+      
+      // ★ 送信成功したら履歴に追加（マップ用）
+      let uploadedHistory = JSON.parse(localStorage.getItem('uploadedHistory') || '[]');
+      uploadedHistory.push({
+        lat: loc ? loc.lat : 0,
+        lng: loc ? loc.lng : 0,
+        img: item.dataURL,
+        timestamp: item.timestamp
+      });
+      localStorage.setItem('uploadedHistory', JSON.stringify(uploadedHistory));
+      
     } catch (e) {
       console.error("Discord送信エラー", e);
     }
@@ -493,7 +490,6 @@
     return new Blob([bytes], { type: mime });
   }
 
-  // ギャラリー描画
   function renderGallery() {
     galleryGrid.innerHTML = '';
     if (mediaItems.length === 0) {
@@ -556,6 +552,7 @@
       pageIndicator.style.display = 'none';
     }
     
+    // ★ 手動アップロードされていない場合は「アップロード」ボタンを表示
     if (currentPreviewItem.isUploaded) {
       previewUpload.textContent = '済';
       previewUpload.style.background = '#555';
@@ -596,18 +593,19 @@
     }
   };
 
-  // 手動アップロードボタン
+  // ★ 手動アップロードボタン（ここを押したときだけ送信）
   previewUpload.onclick = async () => {
     if (!currentPreviewItem || currentPreviewItem.isUploaded || !webhookURL) return;
     previewUpload.textContent = '送信中...';
     previewUpload.disabled = true;
-    await sendToDiscord(currentPreviewItem, currentPreviewItem.location);
+    
+    await sendToDiscord(currentPreviewItem);
+    
     currentPreviewItem.isUploaded = true;
     previewUpload.textContent = '済';
     previewUpload.style.background = '#555';
   };
 
-  // 空でもギャラリーを開けるようにする
   thumbBtn.addEventListener('click', () => {
     renderGallery();
     galleryOverlay.classList.add('open');
@@ -617,25 +615,29 @@
 
   // ================= マップ =================
   btnOthers.addEventListener('click', async () => {
+    const loc = await getLocation();
+    if (!loc) {
+      alert('マップを見るには位置情報の許可が必要です。');
+      return;
+    }
+
     galleryOverlay.classList.remove('open');
-    
-    await getLocation();
     mapOverlay.classList.add('open');
     
     if (!myMap) {
-      myMap = L.map('map').setView([36.2048, 138.2529], 5);
+      myMap = L.map('map').setView([myLocation.lat, myLocation.lng], 15);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap',
         maxZoom: 19
       }).addTo(myMap);
       
-      if (myLocation) {
-        L.circleMarker([myLocation.lat, myLocation.lng], {
-          radius: 8, fillColor: '#2575fc', color: '#fff', weight: 2, fillOpacity: 1
-        }).addTo(myMap).bindPopup('現在地');
-      }
+      L.circleMarker([myLocation.lat, myLocation.lng], {
+        radius: 8, fillColor: '#2575fc', color: '#fff', weight: 2, fillOpacity: 1
+      }).addTo(myMap).bindPopup('現在地');
       
       mapMarkersLayer = L.layerGroup().addTo(myMap);
+    } else {
+      myMap.setView([myLocation.lat, myLocation.lng], 15);
     }
     
     setTimeout(() => { myMap.invalidateSize(); }, 200);
@@ -655,6 +657,7 @@
 
     const groups = [];
     uploadedHistory.forEach(item => {
+      if (item.lat === 0 && item.lng === 0) return; // 位置情報なしは除外
       let foundGroup = false;
       for (let group of groups) {
         if (Math.abs(group[0].lat - item.lat) < 0.001 && Math.abs(group[0].lng - item.lng) < 0.001) {
@@ -701,7 +704,6 @@
       if (data && data.w) {
         webhookURL = data.w;
         
-        // タイトルの反映（空欄なら表示しない）
         const customTitle = data.t || '';
         if (customTitle.trim() !== '') {
           appTitle.textContent = customTitle;
