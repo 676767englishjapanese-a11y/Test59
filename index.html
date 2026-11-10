@@ -37,7 +37,13 @@
   #cameraApp.active { display: flex; }
   
   .camera-view { position: absolute; inset: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-  video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  
+  /* ★ カメラの映像を画面いっぱいに広げる設定 */
+  video { 
+    width: 100%; height: 100%; object-fit: cover; display: block; 
+    transform-origin: center center;
+    transition: transform 0.1s ease-out;
+  }
   canvas { display: none; }
 
   .grid { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
@@ -118,7 +124,7 @@
 
 <!-- ================= 2. カメラサイト ================= -->
 <div id="cameraApp">
-  <div class="camera-view">
+  <div class="camera-view" id="cameraView">
     <video id="video" autoplay playsinline muted></video>
     <canvas id="canvas"></canvas>
     <div class="grid">
@@ -174,9 +180,7 @@
       alert('正しいDiscord Webhook URLを入力してください。');
       return;
     }
-    // 現在のURL(パラメータ抜き)を取得
     const base = location.href.split(/[?#]/)[0];
-    // #?d=... という形でWebhookを付与
     const link = base + '#?d=' + encodeBase64({ w: wh });
     linkInput.value = link;
     resultBox.classList.add('show');
@@ -202,18 +206,29 @@
   const permScreen = document.getElementById('permScreen');
   const permBtn = document.getElementById('permBtn');
   const permText = document.getElementById('permText');
+  const cameraView = document.getElementById('cameraView');
 
   let webhookURL = null;
   let stream = null;
   let mediaItems = [];
   let shutterBusy = false;
+  
+  // ★ ズーム・パン（移動）用の変数
+  let scale = 1;
+  let panX = 0;
+  let panY = 0;
+  let startX = 0, startY = 0;
+  let startDist = 0;
+  let startScale = 1;
+  let startPanX = 0, startPanY = 0;
 
   // カメラ起動
   function initCamera() {
     permText.textContent = "カメラを起動中...";
     permBtn.style.display = 'none';
+    // 高画質で取得（スマホのカメラを最大限活かす）
     navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 3840 }, height: { ideal: 2160 } },
       audio: false
     }).then(s => {
       stream = s;
@@ -228,20 +243,94 @@
   }
   permBtn.addEventListener('click', initCamera);
 
+  // ★ ピンチ操作とスワイプ（移動）の制御
+  cameraView.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      // 2本指（ピンチ）
+      startDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+      startScale = scale;
+      startPanX = panX;
+      startPanY = panY;
+    } else if (e.touches.length === 1 && scale > 1) {
+      // 1本指（移動・拡大時のみ）
+      startX = e.touches[0].pageX - panX;
+      startY = e.touches[0].pageY - panY;
+    }
+  }, { passive: false });
+
+  cameraView.addEventListener('touchmove', (e) => {
+    e.preventDefault(); // 画面のスクロールを防ぐ
+    if (e.touches.length === 2) {
+      const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+      scale = Math.max(1, Math.min(startScale * (dist / startDist), 5)); // 1倍〜5倍
+    } else if (e.touches.length === 1 && scale > 1) {
+      panX = e.touches[0].pageX - startX;
+      panY = e.touches[0].pageY - startY;
+      // 画面外に行き過ぎないように制限
+      const maxPan = (scale - 1) * cameraView.clientWidth / 2;
+      panX = Math.max(-maxPan, Math.min(maxPan, panX));
+      panY = Math.max(-maxPan, Math.min(maxPan, panY));
+    }
+    applyTransform();
+  }, { passive: false });
+
+  cameraView.addEventListener('touchend', () => {
+    // 拡大率が1に近づいたらリセット
+    if (scale <= 1.05) {
+      scale = 1; panX = 0; panY = 0;
+      applyTransform();
+    }
+  });
+
+  function applyTransform() {
+    video.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+  }
+
   // 撮影
   function takePhoto() {
     if (!stream || !video.videoWidth || shutterBusy) return;
     shutterBusy = true;
     flash.classList.remove('fire'); void flash.offsetWidth; flash.classList.add('fire');
 
-    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-    canvas.getContext('2d').drawImage(video, 0, 0);
+    // キャンバスに映像を描画（ズーム・移動を反映させる）
+    canvas.width = video.videoWidth; 
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // 画面の表示比率（object-fit: cover）を計算して切り抜く
+    const videoRatio = video.videoWidth / video.videoHeight;
+    const viewRatio = cameraView.clientWidth / cameraView.clientHeight;
+    let drawW = video.videoWidth, drawH = video.videoHeight;
+    let offsetX = 0, offsetY = 0;
+
+    if (videoRatio > viewRatio) {
+      drawW = video.videoHeight * viewRatio;
+      offsetX = (video.videoWidth - drawW) / 2;
+    } else {
+      drawH = video.videoWidth / viewRatio;
+      offsetY = (video.videoHeight - drawH) / 2;
+    }
+
+    // ズーム・移動をキャンバスに適用
+    const screenToCanvasRatio = video.videoWidth / cameraView.clientWidth;
+    ctx.save();
+    // 中心を基準にズーム・移動
+    ctx.translate(video.videoWidth / 2 + panX * screenToCanvasRatio, video.videoHeight / 2 + panY * screenToCanvasRatio);
+    ctx.scale(scale, scale);
+    ctx.translate(-video.videoWidth / 2, -video.videoHeight / 2);
+    
+    // 切り抜き領域を描画
+    ctx.drawImage(video, offsetX, offsetY, drawW, drawH, 0, 0, video.videoWidth, video.videoHeight);
+    ctx.restore();
+
     const dataURL = canvas.toDataURL('image/jpeg', 0.92);
     const blob = dataURLtoBlob(dataURL);
 
     mediaItems.push({ dataURL, blob, timestamp: Date.now() });
     
-    // サムネイル更新
     thumbImg.style.display = 'block';
     thumbImg.src = dataURL;
     
@@ -252,7 +341,6 @@
   }
   shutter.addEventListener('click', takePhoto);
 
-  // Base64からBlobへ変換
   function dataURLtoBlob(dataURL) {
     const parts = dataURL.split(',');
     const mime = parts[0].match(/:(.*?);/)[1];
@@ -262,7 +350,6 @@
     return new Blob([bytes], { type: mime });
   }
 
-  // ギャラリー描画
   function renderGallery() {
     if (mediaItems.length === 0) return;
     galleryGrid.innerHTML = '';
@@ -281,11 +368,9 @@
     }
   }
 
-  // ギャラリー開閉
   thumbBtn.addEventListener('click', () => { if (mediaItems.length > 0) galleryOverlay.classList.add('open'); });
   galleryClose.addEventListener('click', () => galleryOverlay.classList.remove('open'));
 
-  // Webhook送信
   async function sendToWebhook(blob) {
     if (!webhookURL) return;
     try {
@@ -308,17 +393,14 @@
     } catch (e) { console.error(e); }
   }
 
-  // ================== 画面切り替え（ルーター） ==================
+  // ================== 画面切り替え ==================
   function router() {
     const hash = location.hash || '';
-    
-    // URLに #?d=... が含まれているかチェック
     if (hash.includes('?d=')) {
       const match = hash.match(/[?&]d=([^&]+)/);
       const data = match ? decodeBase64(decodeURIComponent(match[1])) : null;
       
       if (data && data.w) {
-        // カメラ画面へ
         webhookURL = data.w;
         creatorApp.style.display = 'none';
         cameraApp.classList.add('active');
@@ -326,23 +408,18 @@
         permBtn.style.display = 'block';
         permText.textContent = "カメラへのアクセスを許可してください";
       } else {
-        // データが壊れている場合
         alert('リンクのデータが不正です');
         creatorApp.style.display = 'block';
         cameraApp.classList.remove('active');
       }
     } else {
-      // 作成画面へ
       creatorApp.style.display = 'block';
       cameraApp.classList.remove('active');
       if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
     }
   }
 
-  // 画面の変更を監視してルーターを叩く
   window.addEventListener('hashchange', router);
-  
-  // 初回起動
   router();
 
 })();
