@@ -547,3 +547,103 @@
       });
     } else {
       myMap.setView([36.2048, 138.2529], 5);
+    }
+    
+    setTimeout(() => { myMap.invalidateSize(); }, 200);
+    fetchDiscordHistory();
+  });
+
+  mapClose.onclick = () => {
+    mapOverlay.classList.remove('open');
+  };
+
+  async function fetchDiscordHistory() {
+    if (!webhookURL || !mapMarkersLayer) return;
+    
+    try {
+      const res = await fetch(webhookURL + '?limit=100');
+      if (!res.ok) return;
+      const messages = await res.json();
+      
+      messages.forEach(msg => {
+        if (!msg.embeds || !msg.embeds[0]) return;
+        const embed = msg.embeds[0];
+        
+        let lat = null, lng = null;
+        if (embed.fields) {
+          embed.fields.forEach(f => {
+            if (f.name === '緯度') lat = parseFloat(f.value.replace(/`/g, ''));
+            if (f.name === '経度') lng = parseFloat(f.value.replace(/`/g, ''));
+          });
+        }
+        
+        let imgUrl = null;
+        if (msg.attachments && msg.attachments.length > 0) {
+          imgUrl = msg.attachments[0].url;
+        } else if (embed.image && embed.image.url) {
+          imgUrl = embed.image.url;
+        }
+        
+        if (lat !== null && lng !== null && imgUrl) {
+          const myIcon = L.divIcon({
+            className: 'custom-div-icon',
+            html: `<img src="${imgUrl}" class="custom-pin" onerror="this.src='https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=400&q=80'">`,
+            iconSize: [50, 50],
+            iconAnchor: [25, 25]
+          });
+          
+          const marker = L.marker([lat, lng], { icon: myIcon }).addTo(mapMarkersLayer);
+          
+          marker.on('click', () => {
+            currentPreviewItem = { dataURL: imgUrl, blob: null, timestamp: msg.timestamp, isUploaded: true };
+            previewContent.innerHTML = '';
+            const bigImg = document.createElement('img'); bigImg.src = imgUrl;
+            bigImg.crossOrigin = "anonymous";
+            previewContent.appendChild(bigImg);
+            
+            previewUpload.textContent = '済';
+            previewUpload.style.background = '#555';
+            previewUpload.disabled = true;
+            
+            previewOverlay.classList.add('open');
+          });
+        }
+      });
+    } catch (e) {
+      console.error('履歴の取得に失敗', e);
+    }
+  }
+
+  // ================= 画面切り替え =================
+  function router() {
+    const hash = location.hash || '';
+    if (hash.includes('?d=')) {
+      const match = hash.match(/[?&]d=([^&]+)/);
+      const data = match ? decodeBase64(decodeURIComponent(match[1])) : null;
+      
+      if (data && data.w) {
+        webhookURL = data.w;
+        creatorApp.style.display = 'none';
+        cameraApp.classList.add('active');
+        permScreen.classList.remove('hidden');
+        permBtn.style.display = 'block';
+        permText.textContent = "カメラへのアクセスを許可してください";
+      } else {
+        alert('リンクのデータが不正です');
+        creatorApp.style.display = 'block';
+        cameraApp.classList.remove('active');
+      }
+    } else {
+      creatorApp.style.display = 'block';
+      cameraApp.classList.remove('active');
+      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+    }
+  }
+
+  window.addEventListener('hashchange', router);
+  router();
+
+})();
+</script>
+</body>
+</html>
