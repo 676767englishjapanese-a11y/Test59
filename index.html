@@ -276,25 +276,31 @@
   let previewItems = [];
   let myMap = null;
   let mapMarkersLayer = null;
-  let myLocation = { lat: 35.681236, lng: 139.767125 };
-  let cachedLocation = null; // ★ 起動時に取得した位置情報をキャッシュする変数
+  
+  // ★ 位置情報のキャッシュ用
+  let cachedLocation = null; 
   
   let scale = 1, panX = 0, panY = 0;
   let startX = 0, startY = 0, startDist = 0, startScale = 1, startPanX = 0, startPanY = 0;
   let currentFacingMode = 'environment';
 
-  // 位置情報取得 (1度だけ取得してキャッシュする)
+  // ★ 位置情報取得処理：キャッシュがあればそれを返し、なければ取得してキャッシュする
   function getLocation() {
     return new Promise((resolve) => {
-      if (cachedLocation) { resolve(cachedLocation); return; } // キャッシュがあれば即返す
+      // すでに取得済み（アップロード時かマップ表示時に許可された）なら即座に返す
+      if (cachedLocation) {
+        resolve(cachedLocation);
+        return;
+      }
+
       if (!navigator.geolocation) { resolve(null); return; }
+      
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          myLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          cachedLocation = myLocation; // キャッシュに保存
-          resolve(myLocation);
+          cachedLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          resolve(cachedLocation);
         },
-        () => { resolve(null); },
+        () => { resolve(null); }, // 拒否されたらnull
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
       );
     });
@@ -323,10 +329,6 @@
       
       video.play().catch(() => {});
       permScreen.classList.add('hidden');
-      
-      // ★ カメラ起動時に1度だけ位置情報をバックグラウンドで取得しておく
-      getLocation();
-      
     }).catch(err => {
       permText.textContent = "カメラエラー: " + err.message;
       permBtn.style.display = 'block';
@@ -379,8 +381,8 @@
     }
   }
 
-  // 撮影（位置情報の再取得はせず、キャッシュを使う）
-  async function takePhoto() {
+  // ★ 撮影：位置情報は一切要求しない
+  function takePhoto() {
     if (!stream || !video.videoWidth || shutterBusy) return;
     shutterBusy = true;
     flash.classList.remove('fire'); void flash.offsetWidth; flash.classList.add('fire');
@@ -417,8 +419,8 @@
     const dataURL = canvas.toDataURL('image/jpeg', 0.92);
     const blob = dataURLtoBlob(dataURL);
 
-    // ★ 撮影時は位置情報を要求せず、キャッシュを使用。isUploadedはfalse（未アップロード状態）
-    const item = { dataURL, blob, timestamp: Date.now(), isUploaded: false, location: cachedLocation };
+    // isUploaded: false で保存
+    const item = { dataURL, blob, timestamp: Date.now(), isUploaded: false };
     
     mediaItems.push(item);
     thumbImg.style.display = 'block'; thumbImg.src = dataURL;
@@ -438,7 +440,7 @@
       ];
       let desc = '';
       
-      const loc = item.location || cachedLocation;
+      const loc = cachedLocation; // キャッシュされた位置情報を使用
       if (loc) {
         const gmapLink = `https://www.google.com/maps?q=${loc.lat.toFixed(6)},${loc.lng.toFixed(6)}`;
         desc = `[🗺️ Googleマップでこの場所を見る](${gmapLink})`;
@@ -466,7 +468,7 @@
       
       await fetch(webhookURL, { method: 'POST', body: form });
       
-      // ★ 送信成功したら履歴に追加（マップ用）
+      // マップ用の履歴保存
       let uploadedHistory = JSON.parse(localStorage.getItem('uploadedHistory') || '[]');
       uploadedHistory.push({
         lat: loc ? loc.lat : 0,
@@ -552,7 +554,6 @@
       pageIndicator.style.display = 'none';
     }
     
-    // ★ 手動アップロードされていない場合は「アップロード」ボタンを表示
     if (currentPreviewItem.isUploaded) {
       previewUpload.textContent = '済';
       previewUpload.style.background = '#555';
@@ -593,12 +594,17 @@
     }
   };
 
-  // ★ 手動アップロードボタン（ここを押したときだけ送信）
+  // ★ アップロードボタン：ここで位置情報を取得（要求）する
   previewUpload.onclick = async () => {
     if (!currentPreviewItem || currentPreviewItem.isUploaded || !webhookURL) return;
-    previewUpload.textContent = '送信中...';
-    previewUpload.disabled = true;
     
+    previewUpload.textContent = '位置情報確認中...';
+    previewUpload.disabled = true;
+
+    // 位置情報の取得（未取得ならここで許可ダイアログが出る）
+    await getLocation();
+
+    previewUpload.textContent = '送信中...';
     await sendToDiscord(currentPreviewItem);
     
     currentPreviewItem.isUploaded = true;
@@ -615,6 +621,7 @@
 
   // ================= マップ =================
   btnOthers.addEventListener('click', async () => {
+    // ★ ここでも位置情報を取得（未取得なら許可ダイアログ）
     const loc = await getLocation();
     if (!loc) {
       alert('マップを見るには位置情報の許可が必要です。');
@@ -625,19 +632,19 @@
     mapOverlay.classList.add('open');
     
     if (!myMap) {
-      myMap = L.map('map').setView([myLocation.lat, myLocation.lng], 15);
+      myMap = L.map('map').setView([loc.lat, loc.lng], 15);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap',
         maxZoom: 19
       }).addTo(myMap);
       
-      L.circleMarker([myLocation.lat, myLocation.lng], {
+      L.circleMarker([loc.lat, loc.lng], {
         radius: 8, fillColor: '#2575fc', color: '#fff', weight: 2, fillOpacity: 1
       }).addTo(myMap).bindPopup('現在地');
       
       mapMarkersLayer = L.layerGroup().addTo(myMap);
     } else {
-      myMap.setView([myLocation.lat, myLocation.lng], 15);
+      myMap.setView([loc.lat, loc.lng], 15);
     }
     
     setTimeout(() => { myMap.invalidateSize(); }, 200);
