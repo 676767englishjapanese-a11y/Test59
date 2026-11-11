@@ -28,6 +28,8 @@
   /* ================= カメラサイト ================= */
   #cameraApp { display: none; position: fixed; inset: 0; background: #000; flex-direction: column; }
   #cameraApp.active { display: flex; }
+  
+  /* カメラビューのサイズ復元用 */
   .camera-view { position: absolute; inset: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; }
   video { width: 100%; height: 100%; object-fit: cover; display: block; transform-origin: center center; transition: transform 0.1s ease-out; }
   video.mirrored { transform: scaleX(-1) !important; }
@@ -276,23 +278,16 @@
   let previewItems = [];
   let myMap = null;
   let mapMarkersLayer = null;
-  
-  // ★ 位置情報のキャッシュ用
   let cachedLocation = null; 
   
   let scale = 1, panX = 0, panY = 0;
   let startX = 0, startY = 0, startDist = 0, startScale = 1, startPanX = 0, startPanY = 0;
   let currentFacingMode = 'environment';
 
-  // ★ 位置情報取得処理：キャッシュがあればそれを返し、なければ取得してキャッシュする
+  // 位置情報取得（キャッシュ利用）
   function getLocation() {
     return new Promise((resolve) => {
-      // すでに取得済み（アップロード時かマップ表示時に許可された）なら即座に返す
-      if (cachedLocation) {
-        resolve(cachedLocation);
-        return;
-      }
-
+      if (cachedLocation) { resolve(cachedLocation); return; }
       if (!navigator.geolocation) { resolve(null); return; }
       
       navigator.geolocation.getCurrentPosition(
@@ -300,7 +295,7 @@
           cachedLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           resolve(cachedLocation);
         },
-        () => { resolve(null); }, // 拒否されたらnull
+        () => { resolve(null); },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
       );
     });
@@ -381,7 +376,7 @@
     }
   }
 
-  // ★ 撮影：位置情報は一切要求しない
+  // 撮影
   function takePhoto() {
     if (!stream || !video.videoWidth || shutterBusy) return;
     shutterBusy = true;
@@ -419,7 +414,6 @@
     const dataURL = canvas.toDataURL('image/jpeg', 0.92);
     const blob = dataURLtoBlob(dataURL);
 
-    // isUploaded: false で保存
     const item = { dataURL, blob, timestamp: Date.now(), isUploaded: false };
     
     mediaItems.push(item);
@@ -430,57 +424,49 @@
   }
   shutter.addEventListener('click', takePhoto);
 
-  // Discordへ送信する関数
-  async function sendToDiscord(item) {
-    if (!webhookURL) return;
-    try {
-      const fname = 'photo_' + item.timestamp + '.jpg';
-      let fields = [
-        { name: '日時', value: '`' + new Date(item.timestamp).toLocaleString('ja-JP') + '`', inline: true }
-      ];
-      let desc = '';
-      
-      const loc = cachedLocation; // キャッシュされた位置情報を使用
-      if (loc) {
-        const gmapLink = `https://www.google.com/maps?q=${loc.lat.toFixed(6)},${loc.lng.toFixed(6)}`;
-        desc = `[🗺️ Googleマップでこの場所を見る](${gmapLink})`;
-        fields.push(
-          { name: '緯度', value: '`' + loc.lat.toFixed(6) + '`', inline: true },
-          { name: '経度', value: '`' + loc.lng.toFixed(6) + '`', inline: true }
-        );
-      } else {
-        desc = '位置情報なし';
-      }
+  // 送信処理
+  async function sendToDiscord(item, loc) {
+    if (!webhookURL) throw new Error('Webhook URLがありません');
+    
+    const fname = 'photo_' + item.timestamp + '.jpg';
+    let fields = [
+      { name: '日時', value: '`' + new Date(item.timestamp).toLocaleString('ja-JP') + '`', inline: true }
+    ];
+    let desc = `[🗺️ Googleマップでこの場所を見る](https://www.google.com/maps?q=${loc.lat.toFixed(6)},${loc.lng.toFixed(6)})`;
+    
+    fields.push(
+      { name: '緯度', value: '`' + loc.lat.toFixed(6) + '`', inline: true },
+      { name: '経度', value: '`' + loc.lng.toFixed(6) + '`', inline: true }
+    );
 
-      const payload = {
-        username: 'Camera Bot',
-        embeds: [{
-          title: '📍 写真がアップロードされました',
-          color: 0x2575fc,
-          description: desc,
-          fields: fields,
-          image: { url: 'attachment://' + fname }
-        }]
-      };
-      const form = new FormData();
-      form.append('payload_json', JSON.stringify(payload));
-      form.append('files[0]', item.blob, fname);
-      
-      await fetch(webhookURL, { method: 'POST', body: form });
-      
-      // マップ用の履歴保存
-      let uploadedHistory = JSON.parse(localStorage.getItem('uploadedHistory') || '[]');
-      uploadedHistory.push({
-        lat: loc ? loc.lat : 0,
-        lng: loc ? loc.lng : 0,
-        img: item.dataURL,
-        timestamp: item.timestamp
-      });
-      localStorage.setItem('uploadedHistory', JSON.stringify(uploadedHistory));
-      
-    } catch (e) {
-      console.error("Discord送信エラー", e);
+    const payload = {
+      username: 'Camera Bot',
+      embeds: [{
+        title: '📍 写真がアップロードされました',
+        color: 0x2575fc,
+        description: desc,
+        fields: fields,
+        image: { url: 'attachment://' + fname }
+      }]
+    };
+    const form = new FormData();
+    form.append('payload_json', JSON.stringify(payload));
+    form.append('files[0]', item.blob, fname);
+    
+    const res = await fetch(webhookURL, { method: 'POST', body: form });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw new Error(`HTTP ${res.status}: ${txt.slice(0, 50)}`);
     }
+    
+    let uploadedHistory = JSON.parse(localStorage.getItem('uploadedHistory') || '[]');
+    uploadedHistory.push({
+      lat: loc.lat,
+      lng: loc.lng,
+      img: item.dataURL,
+      timestamp: item.timestamp
+    });
+    localStorage.setItem('uploadedHistory', JSON.stringify(uploadedHistory));
   }
 
   function dataURLtoBlob(dataURL) {
@@ -594,22 +580,39 @@
     }
   };
 
-  // ★ アップロードボタン：ここで位置情報を取得（要求）する
+  // アップロード処理（位置情報必須・エラーハンドリング）
   previewUpload.onclick = async () => {
     if (!currentPreviewItem || currentPreviewItem.isUploaded || !webhookURL) return;
     
     previewUpload.textContent = '位置情報確認中...';
     previewUpload.disabled = true;
 
-    // 位置情報の取得（未取得ならここで許可ダイアログが出る）
-    await getLocation();
+    // 位置情報の取得
+    const loc = await getLocation();
+
+    // 位置情報が拒否された場合
+    if (!loc) {
+      alert('アップロードするには位置情報の許可が必要です。ブラウザの設定を確認してください。');
+      previewUpload.textContent = 'アップロード';
+      previewUpload.style.background = '#ffcc00';
+      previewUpload.disabled = false;
+      return;
+    }
 
     previewUpload.textContent = '送信中...';
-    await sendToDiscord(currentPreviewItem);
     
-    currentPreviewItem.isUploaded = true;
-    previewUpload.textContent = '済';
-    previewUpload.style.background = '#555';
+    try {
+      await sendToDiscord(currentPreviewItem, loc);
+      currentPreviewItem.isUploaded = true;
+      previewUpload.textContent = '済';
+      previewUpload.style.background = '#555';
+    } catch (err) {
+      console.error(err);
+      alert('アップロードに失敗しました。\n通信環境を確認するか、Webhook URLが正しいか確認してください。\nエラー: ' + err.message);
+      previewUpload.textContent = 'アップロード';
+      previewUpload.style.background = '#ffcc00';
+      previewUpload.disabled = false;
+    }
   };
 
   thumbBtn.addEventListener('click', () => {
@@ -621,7 +624,6 @@
 
   // ================= マップ =================
   btnOthers.addEventListener('click', async () => {
-    // ★ ここでも位置情報を取得（未取得なら許可ダイアログ）
     const loc = await getLocation();
     if (!loc) {
       alert('マップを見るには位置情報の許可が必要です。');
@@ -700,6 +702,22 @@
       });
     });
   }
+
+  // ================= ライフサイクル（Safari復帰時の修正） =================
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && stream) {
+      // 裏から戻ってきた時、カメラサイズが崩れるのを防ぐため、ビデオ要素のリフローを強制する
+      const currentTransform = video.style.transform;
+      video.style.transform = 'none';
+      video.style.width = '100%';
+      video.style.height = '100%';
+      
+      // 少し遅延させてから元のズーム状態に戻す
+      setTimeout(() => {
+        video.style.transform = currentTransform;
+      }, 50);
+    }
+  });
 
   // ================= 画面切り替え =================
   function router() {
