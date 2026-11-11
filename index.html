@@ -8,7 +8,8 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-  html, body { height: 100%; background: #000; color: #fff; font-family: -apple-system, "Hiragino Sans", sans-serif; overflow: hidden; }
+  /* dvhを使ってスマホのアドレスバー変動でもサイズが固定されるようにする */
+  html, body { height: 100vh; height: 100dvh; background: #000; color: #fff; font-family: -apple-system, "Hiragino Sans", sans-serif; overflow: hidden; }
   
   /* ================= 作成サイト ================= */
   #creatorApp { position: fixed; inset: 0; background: #121212; overflow-y: auto; display: flex; justify-content: center; padding: 40px 20px; z-index: 100; }
@@ -29,9 +30,11 @@
   #cameraApp { display: none; position: fixed; inset: 0; background: #000; flex-direction: column; }
   #cameraApp.active { display: flex; }
   
-  /* カメラビューのサイズ復元用 */
-  .camera-view { position: absolute; inset: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-  video { width: 100%; height: 100%; object-fit: cover; display: block; transform-origin: center center; transition: transform 0.1s ease-out; }
+  /* カメラビューのサイズを完全に固定 */
+  .camera-view { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #000; }
+  
+  /* ビデオも完全に画面を埋める */
+  video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; display: block; transform-origin: center center; transition: transform 0.1s ease-out; }
   video.mirrored { transform: scaleX(-1) !important; }
   canvas { display: none; }
 
@@ -71,9 +74,13 @@
   .gallery-overlay.open { display: flex; }
   .gallery-header { padding: 50px 20px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; }
   .gallery-header h2 { font-size: 18px; font-weight: bold; }
-  .header-right { display: flex; gap: 12px; align-items: center; }
+  .header-right { display: flex; gap: 8px; align-items: center; }
+  
+  .btn-reset { background: rgba(255,255,255,0.15); color: #fff; border: none; padding: 8px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; cursor: pointer; }
+  .btn-reset:active { background: rgba(255,100,100,0.5); }
   .btn-others { background: #ffcc00; color: #000; border: none; padding: 8px 14px; border-radius: 20px; font-size: 13px; font-weight: bold; cursor: pointer; }
   .gallery-close { background: none; border: none; color: #fff; font-size: 24px; cursor: pointer; }
+  
   .gallery-grid { flex: 1; overflow-y: auto; padding: 15px 20px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; align-content: start; }
   .gallery-item { aspect-ratio: 3 / 4; background: #222; border-radius: 4px; overflow: hidden; cursor: pointer; }
   .gallery-item img { width: 100%; height: 100%; object-fit: cover; }
@@ -169,6 +176,7 @@
     <div class="gallery-header">
       <h2 id="galleryTitle">ギャラリー</h2>
       <div class="header-right">
+        <button class="btn-reset" id="btnReset">履歴リセット</button>
         <button class="btn-others" id="btnOthers">他の人の写真を見る</button>
         <button class="gallery-close" id="galleryClose">✕</button>
       </div>
@@ -256,6 +264,7 @@
   const galleryEmpty = document.getElementById('galleryEmpty');
   const galleryClose = document.getElementById('galleryClose');
   const btnOthers = document.getElementById('btnOthers');
+  const btnReset = document.getElementById('btnReset');
 
   const previewOverlay = document.getElementById('previewOverlay');
   const previewContent = document.getElementById('previewContent');
@@ -284,7 +293,7 @@
   let startX = 0, startY = 0, startDist = 0, startScale = 1, startPanX = 0, startPanY = 0;
   let currentFacingMode = 'environment';
 
-  // 位置情報取得（キャッシュ利用）
+  // 位置情報取得
   function getLocation() {
     return new Promise((resolve) => {
       if (cachedLocation) { resolve(cachedLocation); return; }
@@ -424,10 +433,26 @@
   }
   shutter.addEventListener('click', takePhoto);
 
-  // 送信処理
+  // 送信処理（Quota超過対策として画像を縮小して送信する）
   async function sendToDiscord(item, loc) {
     if (!webhookURL) throw new Error('Webhook URLがありません');
     
+    // 容量制限対策：画像を最大1024pxに縮小して圧縮
+    const compressedBlob = await new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const c = document.createElement('canvas');
+        let w = img.width, h = img.height;
+        const max = 1024;
+        if (w > h && w > max) { h = h * (max / w); w = max; }
+        else if (h > w && h > max) { w = w * (max / h); h = max; }
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        c.toBlob((b) => resolve(b), 'image/jpeg', 0.85);
+      };
+      img.src = item.dataURL;
+    });
+
     const fname = 'photo_' + item.timestamp + '.jpg';
     let fields = [
       { name: '日時', value: '`' + new Date(item.timestamp).toLocaleString('ja-JP') + '`', inline: true }
@@ -451,7 +476,7 @@
     };
     const form = new FormData();
     form.append('payload_json', JSON.stringify(payload));
-    form.append('files[0]', item.blob, fname);
+    form.append('files[0]', compressedBlob, fname);
     
     const res = await fetch(webhookURL, { method: 'POST', body: form });
     if (!res.ok) {
@@ -463,7 +488,7 @@
     uploadedHistory.push({
       lat: loc.lat,
       lng: loc.lng,
-      img: item.dataURL,
+      img: item.dataURL, // 履歴には元の画質を保存
       timestamp: item.timestamp
     });
     localStorage.setItem('uploadedHistory', JSON.stringify(uploadedHistory));
@@ -580,19 +605,16 @@
     }
   };
 
-  // アップロード処理（位置情報必須・エラーハンドリング）
   previewUpload.onclick = async () => {
     if (!currentPreviewItem || currentPreviewItem.isUploaded || !webhookURL) return;
     
     previewUpload.textContent = '位置情報確認中...';
     previewUpload.disabled = true;
 
-    // 位置情報の取得
     const loc = await getLocation();
 
-    // 位置情報が拒否された場合
     if (!loc) {
-      alert('アップロードするには位置情報の許可が必要です。ブラウザの設定を確認してください。');
+      alert('アップロードするには位置情報の許可が必要です。');
       previewUpload.textContent = 'アップロード';
       previewUpload.style.background = '#ffcc00';
       previewUpload.disabled = false;
@@ -608,7 +630,7 @@
       previewUpload.style.background = '#555';
     } catch (err) {
       console.error(err);
-      alert('アップロードに失敗しました。\n通信環境を確認するか、Webhook URLが正しいか確認してください。\nエラー: ' + err.message);
+      alert('アップロードに失敗しました。\nエラー: ' + err.message);
       previewUpload.textContent = 'アップロード';
       previewUpload.style.background = '#ffcc00';
       previewUpload.disabled = false;
@@ -621,6 +643,15 @@
   });
   
   galleryClose.addEventListener('click', () => galleryOverlay.classList.remove('open'));
+
+  // ★ 履歴リセット機能
+  btnReset.addEventListener('click', () => {
+    if (confirm('これまでアップロードした写真の履歴をマップからリセットしますか？\n（Discordに送信された画像は消えません）')) {
+      localStorage.removeItem('uploadedHistory');
+      if (mapMarkersLayer) mapMarkersLayer.clearLayers();
+      alert('履歴をリセットしました。');
+    }
+  });
 
   // ================= マップ =================
   btnOthers.addEventListener('click', async () => {
@@ -666,7 +697,7 @@
 
     const groups = [];
     uploadedHistory.forEach(item => {
-      if (item.lat === 0 && item.lng === 0) return; // 位置情報なしは除外
+      if (item.lat === 0 && item.lng === 0) return; 
       let foundGroup = false;
       for (let group of groups) {
         if (Math.abs(group[0].lat - item.lat) < 0.001 && Math.abs(group[0].lng - item.lng) < 0.001) {
@@ -706,16 +737,13 @@
   // ================= ライフサイクル（Safari復帰時の修正） =================
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && stream) {
-      // 裏から戻ってきた時、カメラサイズが崩れるのを防ぐため、ビデオ要素のリフローを強制する
-      const currentTransform = video.style.transform;
-      video.style.transform = 'none';
-      video.style.width = '100%';
-      video.style.height = '100%';
-      
-      // 少し遅延させてから元のズーム状態に戻す
+      // 画面が復帰したら、カメラのサイズを再計算して全画面に戻す
       setTimeout(() => {
-        video.style.transform = currentTransform;
-      }, 50);
+        video.style.width = '100%';
+        video.style.height = '100%';
+        video.play().catch(()=>{});
+        window.dispatchEvent(new Event('resize')); // レイアウトの再計算を促す
+      }, 100);
     }
   });
 
