@@ -8,7 +8,6 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-  /* dvhを使ってスマホのアドレスバー変動でもサイズが固定されるようにする */
   html, body { height: 100vh; height: 100dvh; background: #000; color: #fff; font-family: -apple-system, "Hiragino Sans", sans-serif; overflow: hidden; }
   
   /* ================= 作成サイト ================= */
@@ -30,10 +29,7 @@
   #cameraApp { display: none; position: fixed; inset: 0; background: #000; flex-direction: column; }
   #cameraApp.active { display: flex; }
   
-  /* カメラビューのサイズを完全に固定 */
   .camera-view { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #000; }
-  
-  /* ビデオも完全に画面を埋める */
   video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; display: block; transform-origin: center center; transition: transform 0.1s ease-out; }
   video.mirrored { transform: scaleX(-1) !important; }
   canvas { display: none; }
@@ -76,8 +72,6 @@
   .gallery-header h2 { font-size: 18px; font-weight: bold; }
   .header-right { display: flex; gap: 8px; align-items: center; }
   
-  .btn-reset { background: rgba(255,255,255,0.15); color: #fff; border: none; padding: 8px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; cursor: pointer; }
-  .btn-reset:active { background: rgba(255,100,100,0.5); }
   .btn-others { background: #ffcc00; color: #000; border: none; padding: 8px 14px; border-radius: 20px; font-size: 13px; font-weight: bold; cursor: pointer; }
   .gallery-close { background: none; border: none; color: #fff; font-size: 24px; cursor: pointer; }
   
@@ -108,7 +102,6 @@
   .map-header { padding: 50px 20px 20px; display: flex; justify-content: space-between; background: linear-gradient(180deg, rgba(0,0,0,0.8), transparent); position: absolute; top:0; left:0; right:0; z-index: 90; color:#fff; pointer-events: none; }
   .map-header button { pointer-events: auto; background: #fff; color: #000; border: none; padding: 8px 16px; border-radius: 20px; font-weight: bold; font-size: 14px; cursor: pointer; }
   #map { flex: 1; width: 100%; height: 100%; z-index: 10; background: #222; }
-  .custom-pin { width: 50px; height: 50px; border-radius: 50%; border: 3px solid #ffcc00; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.6); background: #000; }
 
   /* ================= 権限・その他 ================= */
   .perm-screen { position: fixed; inset: 0; background: #000; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; text-align: center; color: #fff; }
@@ -176,7 +169,7 @@
     <div class="gallery-header">
       <h2 id="galleryTitle">ギャラリー</h2>
       <div class="header-right">
-        <button class="btn-reset" id="btnReset">履歴リセット</button>
+        <!-- 履歴リセットボタンは削除 -->
         <button class="btn-others" id="btnOthers">他の人の写真を見る</button>
         <button class="gallery-close" id="galleryClose">✕</button>
       </div>
@@ -264,7 +257,6 @@
   const galleryEmpty = document.getElementById('galleryEmpty');
   const galleryClose = document.getElementById('galleryClose');
   const btnOthers = document.getElementById('btnOthers');
-  const btnReset = document.getElementById('btnReset');
 
   const previewOverlay = document.getElementById('previewOverlay');
   const previewContent = document.getElementById('previewContent');
@@ -286,7 +278,6 @@
   let currentPreviewItem = null;
   let previewItems = [];
   let myMap = null;
-  let mapMarkersLayer = null;
   let cachedLocation = null; 
   
   let scale = 1, panX = 0, panY = 0;
@@ -433,11 +424,10 @@
   }
   shutter.addEventListener('click', takePhoto);
 
-  // 送信処理（Quota超過対策として画像を縮小して送信する）
+  // 送信処理
   async function sendToDiscord(item, loc) {
     if (!webhookURL) throw new Error('Webhook URLがありません');
     
-    // 容量制限対策：画像を最大1024pxに縮小して圧縮
     const compressedBlob = await new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
@@ -483,15 +473,6 @@
       const txt = await res.text().catch(() => '');
       throw new Error(`HTTP ${res.status}: ${txt.slice(0, 50)}`);
     }
-    
-    let uploadedHistory = JSON.parse(localStorage.getItem('uploadedHistory') || '[]');
-    uploadedHistory.push({
-      lat: loc.lat,
-      lng: loc.lng,
-      img: item.dataURL, // 履歴には元の画質を保存
-      timestamp: item.timestamp
-    });
-    localStorage.setItem('uploadedHistory', JSON.stringify(uploadedHistory));
   }
 
   function dataURLtoBlob(dataURL) {
@@ -644,15 +625,6 @@
   
   galleryClose.addEventListener('click', () => galleryOverlay.classList.remove('open'));
 
-  // ★ 履歴リセット機能
-  btnReset.addEventListener('click', () => {
-    if (confirm('これまでアップロードした写真の履歴をマップからリセットしますか？\n（Discordに送信された画像は消えません）')) {
-      localStorage.removeItem('uploadedHistory');
-      if (mapMarkersLayer) mapMarkersLayer.clearLayers();
-      alert('履歴をリセットしました。');
-    }
-  });
-
   // ================= マップ =================
   btnOthers.addEventListener('click', async () => {
     const loc = await getLocation();
@@ -665,84 +637,39 @@
     mapOverlay.classList.add('open');
     
     if (!myMap) {
+      // 地図の初期化（現在地を中心に表示）
       myMap = L.map('map').setView([loc.lat, loc.lng], 15);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap',
         maxZoom: 19
       }).addTo(myMap);
       
+      // 現在地に青い点を打つ
       L.circleMarker([loc.lat, loc.lng], {
         radius: 8, fillColor: '#2575fc', color: '#fff', weight: 2, fillOpacity: 1
       }).addTo(myMap).bindPopup('現在地');
       
-      mapMarkersLayer = L.layerGroup().addTo(myMap);
     } else {
       myMap.setView([loc.lat, loc.lng], 15);
     }
     
     setTimeout(() => { myMap.invalidateSize(); }, 200);
-    renderLocalHistory();
+    
+    // ★ 他の人の写真（ピン）は一切表示しない
   });
 
   mapClose.onclick = () => {
     mapOverlay.classList.remove('open');
   };
 
-  function renderLocalHistory() {
-    if (!mapMarkersLayer) return;
-    mapMarkersLayer.clearLayers();
-    
-    const uploadedHistory = JSON.parse(localStorage.getItem('uploadedHistory') || '[]');
-    if (uploadedHistory.length === 0) return;
-
-    const groups = [];
-    uploadedHistory.forEach(item => {
-      if (item.lat === 0 && item.lng === 0) return; 
-      let foundGroup = false;
-      for (let group of groups) {
-        if (Math.abs(group[0].lat - item.lat) < 0.001 && Math.abs(group[0].lng - item.lng) < 0.001) {
-          group.push(item);
-          foundGroup = true;
-          break;
-        }
-      }
-      if (!foundGroup) {
-        groups.push([item]);
-      }
-    });
-
-    groups.forEach(group => {
-      const myIcon = L.divIcon({
-        className: 'custom-div-icon',
-        html: `<img src="${group[0].img}" class="custom-pin">`,
-        iconSize: [50, 50],
-        iconAnchor: [25, 25]
-      });
-      
-      const marker = L.marker([group[0].lat, group[0].lng], { icon: myIcon }).addTo(mapMarkersLayer);
-      
-      marker.on('click', () => {
-        const itemsToPreview = group.map(g => ({
-          dataURL: g.img,
-          blob: null,
-          timestamp: g.timestamp,
-          isUploaded: true
-        }));
-        
-        openPreview(itemsToPreview, 0);
-      });
-    });
-  }
-
   // ================= ライフサイクル（Safari復帰時の修正） =================
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && stream) {
-      // 画面が復帰したら、カメラのサイズを再計算して全画面に戻す
       setTimeout(() => {
         video.style.width = '100%';
         video.style.height = '100%';
         video.play().catch(()=>{});
-        window.dispatchEvent(new Event('resize')); // レイアウトの再計算を促す
+        window.dispatchEvent(new Event('resize'));
       }, 100);
     }
   });
